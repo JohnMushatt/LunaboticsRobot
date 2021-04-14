@@ -8,7 +8,9 @@
 
 #include <frc/TimedRobot.h>
 #include <frc/smartdashboard/SendableChooser.h>
-
+#include <frc/AnalogInput.h>
+#include <vector>
+#include <memory>
 class Robot : public frc::TimedRobot {
  public:
   void RobotInit() override;
@@ -21,9 +23,10 @@ class Robot : public frc::TimedRobot {
   void DisabledPeriodic() override;
   void TestInit() override;
   void TestPeriodic() override;
-  void ReadAnalogInA0();
+  void InitializeAnalogInput(uint64_t channel, uint64_t bits);
+  double_t ReadAnalogIn(uint64_t channel);
  private:
-  frc::AnalogInput A0_IN{0};
+  std::vector<frc::AnalogInput> VEC_ANALOG_IN;
   frc::SendableChooser<std::string> m_chooser;
   const std::string kAutoNameDefault = "Default";
   const std::string kAutoNameCustom = "My Auto";
