@@ -23,7 +23,7 @@ class Robot : public frc::TimedRobot {
   void TestPeriodic() override;
   void ReadAnalogInA0();
  private:
-  frc::AnalogInput A0{0};
+  frc::AnalogInput A0_IN{0};
   frc::SendableChooser<std::string> m_chooser;
   const std::string kAutoNameDefault = "Default";
   const std::string kAutoNameCustom = "My Auto";
