@@ -13,6 +13,16 @@ void Robot::RobotInit() {
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
   this->InitializeAnalogInput(0,4);
+  wpi::outs() << "PDP Current: " << this->PDP.GetTotalCurrent() << "\n";
+  
+  
+  srx.Set(ControlMode::PercentOutput,0);
+  this->TALON_LINACT.SetPosition(1.0);
+  wpi::outs() << "Talon: " << this->TALON_LINACT.GetPosition() << "\n";
+
+  //std::function<void ()> cb = Robot::ReadAnalogChannel0Callback;
+  //this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),2_s,5_s);
+  //this->AddPeriodic(std::bind(&Robot::ChangePWM0Callback,this),5_s,1_s);
 }
 
 /**
@@ -24,7 +34,7 @@ void Robot::RobotInit() {
  * LiveWindow and SmartDashboard integrated updating.
  */
 void Robot::RobotPeriodic() {
-      double_t res = this->ReadAnalogIn(0);
+      //double_t res = this->ReadAnalogIn(0);
 
 }
 
@@ -68,20 +78,45 @@ void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   }
   //this->VEC_ANALOG_IN[channel] = frc::AnalogInput(channel);
   this->VEC_ANALOG_IN[channel].SetOversampleBits(bits);
-  wpi::outs() << "[+] Set analog input " << channel << " oversample rate to " << bits << " bits\n"; 
+  //wpi::outs() << "[+] Set analog input " << channel << " oversample rate to " << bits << " bits\n"; 
 }
 double_t Robot::ReadAnalogIn(uint64_t channel) {
   if(channel > 3) {
     perror("in initializeAnalogInput");
   }
   double_t AVG_Voltage = this->VEC_ANALOG_IN[channel].GetAverageVoltage(); 
-  wpi::outs() << "[+] Read analog input " << channel << " : " << AVG_Voltage << " V (average volts)\n"; 
+//  wpi::outs() << "[+] Read analog input " << channel << " : " << AVG_Voltage << " V (average volts)\n"; 
 
   return AVG_Voltage;
     //uint64_t getValue = this->A0_IN.GetValue();
     //uint64_t getAvgValue = this->A0_IN.GetAverageValue();
     //wpi::outs() << AVG_Voltage << " " << getValue << " " << getAvgValue<< "\n"; 
 }
+void Robot::ReadPDPChannel(uint64_t channel) {
+  if(channel > 15) {
+    perror("In ReadPDPChannel");
+  }
+  double_t Reading =this->PDP.GetCurrent(channel); 
+  frc::SmartDashboard::PutNumber(std::string("Current Channel " + channel),Reading);
+}
+void Robot::ReadAnalogChannel0Callback() {
+  this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();;
+  wpi::outs() << "Current AN_0_IN reading: " << this->AN_0_IN <<"\n";
+}
+void Robot::InitializeTalonLinearActuator(uint64_t channel) {
+  this->TALON_LINACT.SetRaw(0xff);
+}
+
+void Robot::ChangePWM0Callback() {
+  if(this->TALON_LINACT.GetRaw() ==  2000) {
+    this->TALON_LINACT.SetRaw(0x00);
+  }
+  else {
+    this->TALON_LINACT.SetRaw(2000);
+  }
+  wpi::outs() << "Updated PWM0 to " << this->TALON_LINACT.GetPosition() << "\n";
+}
+
 void Robot::TeleopInit() {}
 
 void Robot::TeleopPeriodic() {}

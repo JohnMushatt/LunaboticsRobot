@@ -14,5 +14,15 @@
     "**/.factorypath": true,
     "**/*~": true
   },
-  "C_Cpp.default.configurationProvider": "vscode-wpilib"
+  "C_Cpp.default.configurationProvider": "vscode-wpilib",
+  "files.associations": {
+    "ratio": "cpp",
+    "functional": "cpp",
+    "optional": "cpp",
+    "system_error": "cpp",
+    "type_traits": "cpp",
+    "xlocmon": "cpp",
+    "xlocnum": "cpp",
+    "xtr1common": "cpp"
+  }
 }
