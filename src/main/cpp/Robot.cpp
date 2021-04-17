@@ -5,7 +5,7 @@
 #include "Robot.h"
 
 #include <iostream>
-
+#include <PhysicsSim.h>
 #include <frc/smartdashboard/SmartDashboard.h>
 #define ANALOG_CHANNELS (4)
 void Robot::RobotInit() {
@@ -15,16 +15,19 @@ void Robot::RobotInit() {
   this->InitializeAnalogInput(0,4);
   wpi::outs() << "PDP Current: " << this->PDP.GetTotalCurrent() << "\n";
   
-  
-  srx.Set(ControlMode::PercentOutput,0);
-  this->TALON_LINACT.SetPosition(1.0);
-  wpi::outs() << "Talon: " << this->TALON_LINACT.GetPosition() << "\n";
-
+  this->InitializeTalonLinearActuator();
+  //srx.Set(ControlMode::PercentOutput,0);
   //std::function<void ()> cb = Robot::ReadAnalogChannel0Callback;
   //this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),2_s,5_s);
   //this->AddPeriodic(std::bind(&Robot::ChangePWM0Callback,this),5_s,1_s);
 }
+void Robot::SimulationInit() {
+  PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
+}
 
+void Robot::SimulationPeriodic() {
+  PhysicsSim::GetInstance().Run();
+}
 /**
  * This function is called every robot packet, no matter the mode. Use
  * this for items like diagnostics that you want ran during disabled,
@@ -103,23 +106,97 @@ void Robot::ReadAnalogChannel0Callback() {
   this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();;
   wpi::outs() << "Current AN_0_IN reading: " << this->AN_0_IN <<"\n";
 }
-void Robot::InitializeTalonLinearActuator(uint64_t channel) {
-  this->TALON_LINACT.SetRaw(0xff);
+
+void Robot::InitializeTalonLinearActuator() {
+srx.ConfigFactoryDefault();
+  srx.ConfigSelectedFeedbackSensor(FeedbackDevice::CTRE_MagEncoder_Relative,0,10);
+  /**
+     * Configure Talon SRX Output and Sesnor direction accordingly
+     * Invert Motor to have green LEDs when driving Talon Forward / Requesting Postiive Output
+     * Phase sensor to have positive increment when driving Talon Forward (Green LED)
+     */
+  srx.SetSensorPhase(false);
+  srx.SetInverted(false);
+
+  /* Set relevant frame periods to be at least as fast as periodic rate */
+  srx.SetStatusFramePeriod(StatusFrameEnhanced::Status_13_Base_PIDF0, 10, 10);
+  srx.SetStatusFramePeriod(StatusFrameEnhanced::Status_10_MotionMagic, 10, 10);
+
+  /* Set the peak and nominal outputs */
+  srx.ConfigNominalOutputForward(0, 10);
+  srx.ConfigNominalOutputReverse(0, 10);
+  srx.ConfigPeakOutputForward(1, 10);
+  srx.ConfigPeakOutputReverse(-1, 10);
+
+  /* Set Motion Magic gains in slot0 - see documentation */
+  srx.SelectProfileSlot(0,0);
+  srx.Config_kF(0,0.3,10);
+  srx.Config_kP(0,0.1,10);
+  srx.Config_kI(0.0,0.0,10);
+  srx.Config_kD(0,0.0,10);
+
+  srx.ConfigMotionCruiseVelocity(1500,10);
+  srx.ConfigMotionAcceleration(1500,10);
+
+  srx.SetSelectedSensorPosition(0,0,10);
 }
 
-void Robot::ChangePWM0Callback() {
-  if(this->TALON_LINACT.GetRaw() ==  2000) {
-    this->TALON_LINACT.SetRaw(0x00);
-  }
-  else {
-    this->TALON_LINACT.SetRaw(2000);
-  }
-  wpi::outs() << "Updated PWM0 to " << this->TALON_LINACT.GetPosition() << "\n";
-}
+
+
 
 void Robot::TeleopInit() {}
 
-void Robot::TeleopPeriodic() {}
+void Robot::TeleopPeriodic() {
+  double Left_Y_Stick = -1.0 * joystick.GetY();
+  double Right_Y_Stick = -1.0 * joystick.GetRawAxis(5);
+
+  if(fabs(Left_Y_Stick) < 10.0) {
+    Left_Y_Stick = 0;
+  }
+  if(fabs(Right_Y_Stick) < 10) {
+    Right_Y_Stick =0;
+  }
+  double MotorOuput = srx.GetMotorOutputPercent();
+
+  std::stringstream sb;
+
+  sb << "\tOut%:" << MotorOuput;
+  sb << "\tVel:" << srx.GetSelectedSensorVelocity(0);
+
+  if(joystick.GetRawButton(2)) {
+    srx.SetSelectedSensorPosition(0,0,10);
+  }
+
+  if(joystick.GetRawButton(1)) {
+    double TargetPos = Right_Y_Stick + 4096 * 10.0;
+    srx.Set(ControlMode::MotionMagic,TargetPos);
+    sb << "\terr:" << srx.GetClosedLoopError(0);
+    sb << "\ttrg:" << TargetPos;
+  }
+  else {
+    srx.Set(ControlMode::PercentOutput,Left_Y_Stick);
+  }
+
+  if(joystick.GetRawButtonPressed(6)) {
+    ++_smoothing;
+    if(_smoothing < 0) {
+      _smoothing = 0;
+    }
+    wpi::outs() << "Smoothing is set to: " << _smoothing << "\n";
+    srx.ConfigMotionSCurveStrength(_smoothing,0);
+  }
+
+  if(joystick.GetRawButtonPressed(5)) {
+    --_smoothing;
+    if(_smoothing<0) {
+      _smoothing = 0;
+    }
+    wpi::outs() << "Smooth is set to: " << _smoothing << "\n";
+    srx.ConfigMotionSCurveStrength(_smoothing,0);
+
+    Instrum::Process(&srx,&sb);
+  }
+}
 
 void Robot::DisabledInit() {}
 
