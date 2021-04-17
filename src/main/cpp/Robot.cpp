@@ -191,7 +191,7 @@ void Robot::TeleopPeriodic() {
     if(_smoothing<0) {
       _smoothing = 0;
     }
-    wpi::outs() << "Smooth is set to: " << _smoothing << "\n";
+    wpi::outs() << "Smoothing is set to: " << _smoothing << "\n";
     srx.ConfigMotionSCurveStrength(_smoothing,0);
 
     Instrum::Process(&srx,&sb);
