@@ -167,18 +167,18 @@ void Robot::TeleopPeriodic() {
   double Left_Y_Stick = -1.0 * joystick.GetY();
   double Right_Y_Stick = -1.0 * joystick.GetRawAxis(5);
 
-  if(fabs(Left_Y_Stick) < 10.0) {
+  if(fabs(Left_Y_Stick) < 0.10) {
     Left_Y_Stick = 0;
   }
-  if(fabs(Right_Y_Stick) < 10) {
+  if(fabs(Right_Y_Stick) < 0.10) {
     Right_Y_Stick =0;
   }
   double MotorOuput = srx.GetMotorOutputPercent();
 
   std::stringstream sb;
 
-  sb << "\tOut%:" << MotorOuput;
-  sb << "\tVel:" << srx.GetSelectedSensorVelocity(0);
+  wpi::outs() << "\tOut%:" << MotorOuput;
+  wpi::outs() << "\tVel:" << srx.GetSelectedSensorVelocity(0);
 
   if(joystick.GetRawButton(2)) {
     srx.SetSelectedSensorPosition(0,0,10);
@@ -186,11 +186,12 @@ void Robot::TeleopPeriodic() {
   }
 
   if(joystick.GetRawButton(1)) {
+    wpi::outs() <<"Button 1 pressed, entering magic motion mode\n";
     double TargetPos = Right_Y_Stick + 4096 * 10.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
-    sb << "\terr:" << srx.GetClosedLoopError(0);
-    sb << "\ttrg:" << TargetPos;
+    wpi::outs() << "\terr:" << srx.GetClosedLoopError(0);
+    wpi::outs() << "\ttrg:" << TargetPos;
   }
   else {
     srx.Set(ControlMode::PercentOutput,Left_Y_Stick);
@@ -216,10 +217,10 @@ void Robot::TeleopPeriodic() {
     srx.ConfigMotionSCurveStrength(_smoothing,0);
     SRX_LINACT.ConfigMotionSCurveStrength(_smoothing,0);
 
-
+  }
     Instrum::Process(&srx,&sb);
     Instrum::Process(&SRX_LINACT,&sb);
-  }
+  
 }
 
 void Robot::DisabledInit() {}
