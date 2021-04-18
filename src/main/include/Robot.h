@@ -44,7 +44,8 @@ class Robot : public frc::TimedRobot {
   std::vector<frc::AnalogInput> VEC_ANALOG_IN;
   frc::PowerDistributionPanel PDP;
   frc::Joystick joystick{0};
-  TalonSRX srx = {0};
+  TalonSRX srx = {1};
+  TalonSRX SRX_LINACT = {5};
   frc::SendableChooser<std::string> m_chooser;
   const std::string kAutoNameDefault = "Default";
   const std::string kAutoNameCustom = "My Auto";

@@ -23,6 +23,7 @@ void Robot::RobotInit() {
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
+  PhysicsSim::GetInstance().AddTalonSRX(SRX_LINACT,.75,3400,false);
 }
 
 void Robot::SimulationPeriodic() {
@@ -108,8 +109,10 @@ void Robot::ReadAnalogChannel0Callback() {
 }
 
 void Robot::InitializeTalonLinearActuator() {
-srx.ConfigFactoryDefault();
+  srx.ConfigFactoryDefault();
+  SRX_LINACT.ConfigFactoryDefault();
   srx.ConfigSelectedFeedbackSensor(FeedbackDevice::CTRE_MagEncoder_Relative,0,10);
+  SRX_LINACT.ConfigSelectedFeedbackSensor(FeedbackDevice::CTRE_MagEncoder_Relative,0,10);
   /**
      * Configure Talon SRX Output and Sesnor direction accordingly
      * Invert Motor to have green LEDs when driving Talon Forward / Requesting Postiive Output
@@ -117,17 +120,24 @@ srx.ConfigFactoryDefault();
      */
   srx.SetSensorPhase(false);
   srx.SetInverted(false);
+  SRX_LINACT.SetSensorPhase(false);
+  SRX_LINACT.SetInverted(false);
 
   /* Set relevant frame periods to be at least as fast as periodic rate */
   srx.SetStatusFramePeriod(StatusFrameEnhanced::Status_13_Base_PIDF0, 10, 10);
   srx.SetStatusFramePeriod(StatusFrameEnhanced::Status_10_MotionMagic, 10, 10);
+  SRX_LINACT.SetStatusFramePeriod(StatusFrameEnhanced::Status_13_Base_PIDF0,10,10);
+  SRX_LINACT.SetStatusFramePeriod(StatusFrame::Status_10_MotionMagic_,10,10);
 
   /* Set the peak and nominal outputs */
   srx.ConfigNominalOutputForward(0, 10);
   srx.ConfigNominalOutputReverse(0, 10);
   srx.ConfigPeakOutputForward(1, 10);
   srx.ConfigPeakOutputReverse(-1, 10);
-
+  SRX_LINACT.ConfigNominalOutputForward(0, 10);
+  SRX_LINACT.ConfigNominalOutputReverse(0, 10);
+  SRX_LINACT.ConfigPeakOutputForward(1, 10);
+  SRX_LINACT.ConfigPeakOutputReverse(-1, 10);
   /* Set Motion Magic gains in slot0 - see documentation */
   srx.SelectProfileSlot(0,0);
   srx.Config_kF(0,0.3,10);
@@ -135,10 +145,17 @@ srx.ConfigFactoryDefault();
   srx.Config_kI(0.0,0.0,10);
   srx.Config_kD(0,0.0,10);
 
-  srx.ConfigMotionCruiseVelocity(1500,10);
-  srx.ConfigMotionAcceleration(1500,10);
+  SRX_LINACT.SelectProfileSlot(0,0);
+  SRX_LINACT.Config_kF(0,0.3,10);
+  SRX_LINACT.Config_kP(0,0.1,10);
+  SRX_LINACT.Config_kI(0.0,0.0,10);
+  SRX_LINACT.Config_kD(0,0.0,10);
+  SRX_LINACT.ConfigMotionCruiseVelocity(1500,10);
+  SRX_LINACT.ConfigMotionAcceleration(1500,10);
 
   srx.SetSelectedSensorPosition(0,0,10);
+  SRX_LINACT.SetSelectedSensorPosition(0,0,10);
+
 }
 
 
@@ -165,16 +182,19 @@ void Robot::TeleopPeriodic() {
 
   if(joystick.GetRawButton(2)) {
     srx.SetSelectedSensorPosition(0,0,10);
+    SRX_LINACT.SetSelectedSensorPosition(0,0,10);
   }
 
   if(joystick.GetRawButton(1)) {
     double TargetPos = Right_Y_Stick + 4096 * 10.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
+    SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
     sb << "\terr:" << srx.GetClosedLoopError(0);
     sb << "\ttrg:" << TargetPos;
   }
   else {
     srx.Set(ControlMode::PercentOutput,Left_Y_Stick);
+    SRX_LINACT.Set(ControlMode::PercentOutput,Left_Y_Stick);
   }
 
   if(joystick.GetRawButtonPressed(6)) {
@@ -184,6 +204,7 @@ void Robot::TeleopPeriodic() {
     }
     wpi::outs() << "Smoothing is set to: " << _smoothing << "\n";
     srx.ConfigMotionSCurveStrength(_smoothing,0);
+    SRX_LINACT.ConfigMotionSCurveStrength(_smoothing,0);
   }
 
   if(joystick.GetRawButtonPressed(5)) {
@@ -193,8 +214,11 @@ void Robot::TeleopPeriodic() {
     }
     wpi::outs() << "Smoothing is set to: " << _smoothing << "\n";
     srx.ConfigMotionSCurveStrength(_smoothing,0);
+    SRX_LINACT.ConfigMotionSCurveStrength(_smoothing,0);
+
 
     Instrum::Process(&srx,&sb);
+    Instrum::Process(&SRX_LINACT,&sb);
   }
 }
 
