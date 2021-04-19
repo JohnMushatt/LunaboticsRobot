@@ -38,6 +38,7 @@ class Robot : public frc::TimedRobot {
  private:
 
   int _smoothing;
+  void DebugControllerButtons();
   void InitializeAnalogInput(uint64_t channel, uint64_t bits);
   void InitializeTalonLinearActuator();
   volatile double_t AN_0_IN;

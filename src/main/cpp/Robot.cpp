@@ -16,10 +16,8 @@ void Robot::RobotInit() {
   wpi::outs() << "PDP Current: " << this->PDP.GetTotalCurrent() << "\n";
   
   this->InitializeTalonLinearActuator();
-  //srx.Set(ControlMode::PercentOutput,0);
-  //std::function<void ()> cb = Robot::ReadAnalogChannel0Callback;
-  //this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),2_s,5_s);
-  //this->AddPeriodic(std::bind(&Robot::ChangePWM0Callback,this),5_s,1_s);
+
+  //this->AddPeriodic(std::bind(&Robot::DebugControllerButtons,this),1_s,1_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -28,6 +26,22 @@ void Robot::SimulationInit() {
 
 void Robot::SimulationPeriodic() {
   PhysicsSim::GetInstance().Run();
+}
+void Robot::DebugControllerButtons() {
+  
+  int TotalButtons = this->joystick.GetButtonCount();
+  for(size_t ButtonIndex = 1; ButtonIndex < TotalButtons; ButtonIndex++) {
+    if(this->joystick.GetRawButtonPressed(ButtonIndex)) {
+      wpi::outs() << "Button " << ButtonIndex << " has been pressed\n";
+    }
+  }
+  int TotalAxis = this->joystick.GetAxisCount();
+  for(size_t AxisIndex = 0; AxisIndex < TotalAxis;AxisIndex++) {
+    if(this->joystick.GetRawAxis(AxisIndex)) {
+      wpi::outs() << "Axis " << AxisIndex << " w/ type " << this->joystick.GetAxisType(AxisIndex) << " @ " 
+      << this->joystick.GetRawAxis(AxisIndex) << "\n";
+    }
+  }
 }
 /**
  * This function is called every robot packet, no matter the mode. Use
@@ -177,8 +191,7 @@ void Robot::TeleopPeriodic() {
 
   std::stringstream sb;
 
-  wpi::outs() << "\tOut%:" << MotorOuput;
-  wpi::outs() << "\tVel:" << srx.GetSelectedSensorVelocity(0);
+
 
   if(joystick.GetRawButton(2)) {
     srx.SetSelectedSensorPosition(0,0,10);
@@ -190,14 +203,14 @@ void Robot::TeleopPeriodic() {
     double TargetPos = Right_Y_Stick + 4096 * 10.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
-    wpi::outs() << "\terr:" << srx.GetClosedLoopError(0);
-    wpi::outs() << "\ttrg:" << TargetPos;
   }
   else {
     srx.Set(ControlMode::PercentOutput,Left_Y_Stick);
-    SRX_LINACT.Set(ControlMode::PercentOutput,Left_Y_Stick);
+    SRX_LINACT.Set(ControlMode::PercentOutput,Right_Y_Stick);
   }
-
+  if(joystick.GetButtonCount()!=0) {
+    wpi::outs() << "number buttons pressed: " << joystick.GetButtonCount() << "\n";
+  }
   if(joystick.GetRawButtonPressed(6)) {
     ++_smoothing;
     if(_smoothing < 0) {
