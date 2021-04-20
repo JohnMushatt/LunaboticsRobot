@@ -31,13 +31,18 @@ class Robot : public frc::TimedRobot {
   void TestPeriodic() override;
   void SimulationInit() override;
 	void SimulationPeriodic() override;
+  double_t GetLinearActuatorTurnValue();
+ private:
+  int _smoothing;
+
+  enum ROBOT_STATE {RESET,DIG_EXTEND_FOURBAR,DIG_EXTEND_SCOOP,DIG_RETRACT_FOURBAR,DIG_RETRACT_SCOOP,DUMP,ERR,DONE};
+  ROBOT_STATE CURRENT_ROBOT_STATE;
+  std::string GetStateAsString(ROBOT_STATE state);
+
   void ReadPDPChannel(uint64_t channel);
   double_t ReadAnalogIn(uint64_t channel);
   void ReadAnalogChannel0Callback();
   void ChangePWM0Callback();
- private:
-
-  int _smoothing;
   void DebugControllerButtons();
   void InitializeAnalogInput(uint64_t channel, uint64_t bits);
   void InitializeTalonLinearActuator();

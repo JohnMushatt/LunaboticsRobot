@@ -2,12 +2,29 @@
 // Open Source Software; you can modify and/or share it under the terms of
 // the WPILib BSD license file in the root directory of this project.
 
-#include "Robot.h"
+#include <Robot.h>
 
 #include <iostream>
 #include <PhysicsSim.h>
 #include <frc/smartdashboard/SmartDashboard.h>
 #define ANALOG_CHANNELS (4)
+#define PDPChannel_LinearActuator (0)
+
+#define FOURBAR_EXTENSION_LIMIT (4000.0)
+#define FOURBAR_RETRACTION_LIMIT (1000.0)
+
+#define SCOOP_EXTENSION_LIMIT (10.0)
+#define SCOOP_RETRACTION_LIMIT (1.0)
+//TODO Add negative (reverse direction) values
+#define FOURBAR_OUTPUT_ZERO (0.0)
+#define FOURBAR_OUTPUT_HALF (.5)
+#define FOURBAR_OUTPUT_FULL (1.0)
+
+#define LINACT_OUTPUT_ZERO (0.0)
+#define LINACT_OUTPUT_HALF (.5)
+#define LINACT_OUTPUT_FULL (1.0)
+
+
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
@@ -16,7 +33,7 @@ void Robot::RobotInit() {
   wpi::outs() << "PDP Current: " << this->PDP.GetTotalCurrent() << "\n";
   
   this->InitializeTalonLinearActuator();
-
+  this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
   //this->AddPeriodic(std::bind(&Robot::DebugControllerButtons,this),1_s,1_s);
 }
 void Robot::SimulationInit() {
@@ -68,7 +85,10 @@ void Robot::RobotPeriodic() {
  * make sure to add them to the chooser code above as well.
  */
 void Robot::AutonomousInit() {
+  this->CURRENT_ROBOT_STATE = RESET;
   m_autoSelected = m_chooser.GetSelected();
+  srx.SetSelectedSensorPosition(0,0,10);
+  SRX_LINACT.SetSelectedSensorPosition(0,0,10);
   // m_autoSelected = SmartDashboard::GetString("Auto Selector",
   //     kAutoNameDefault);
   std::cout << "Auto selected: " << m_autoSelected << std::endl;
@@ -79,12 +99,91 @@ void Robot::AutonomousInit() {
     // Default Auto goes here
   }
 }
+std::string Robot::GetStateAsString(ROBOT_STATE state) {
 
+  switch (state) {
+    case ROBOT_STATE::RESET:
+      return std::string("RESET");
+    case ROBOT_STATE::DIG_EXTEND_FOURBAR:
+      return std::string("DIG_EXTEND_FOURBAR");    
+    case ROBOT_STATE::DIG_EXTEND_SCOOP:
+      return std::string("DIG_EXTEND_SCOOP");    
+    case ROBOT_STATE::DIG_RETRACT_FOURBAR:
+      return std::string("DIG_RETRACT_FOURBAR");    
+    case ROBOT_STATE::DIG_RETRACT_SCOOP:
+      return std::string("DIG_RETRACT_SCOOP");    
+    case ROBOT_STATE::DUMP:
+      return std::string("DONE");    
+    default:
+      return std::string("ERR");
+  }
+}
+/**
+ * Should be general autonomous function, but for now it will be auto digger
+ */
 void Robot::AutonomousPeriodic() {
-  if (m_autoSelected == kAutoNameCustom) {
-    // Custom Auto goes here
-  } else {
-    // Default Auto goes here
+  /**
+   * Get important data about the state of the robot
+   */
+  //wpi::outs() << "Current State: " << ""
+  double_t PositionActuator = this->GetLinearActuatorTurnValue();
+  double_t CurrentDraw_LinearActuator = this->PDP.GetCurrent(PDPChannel_LinearActuator);
+  double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+  /**
+   * State Machine
+   */
+  //Reset State
+  if(this->CURRENT_ROBOT_STATE == RESET) {
+    this->CURRENT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
+  }
+  //Fourbar phase state
+  else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
+    if(PositionFourbar > FOURBAR_EXTENSION_LIMIT) {
+      this->CURRENT_ROBOT_STATE =  DIG_EXTEND_SCOOP;
+    }
+    else {
+      this->CURRENT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
+    }
+  }
+  //Scoop phase state
+  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
+    if(PositionActuator > SCOOP_EXTENSION_LIMIT) {
+      this->CURRENT_ROBOT_STATE = DIG_RETRACT_SCOOP;
+    }
+    else {
+      this->CURRENT_ROBOT_STATE = DIG_EXTEND_SCOOP;
+    }
+  }
+  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
+    if(PositionActuator < SCOOP_RETRACTION_LIMIT) {
+      this->CURRENT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
+    }
+    else {
+      this->CURRENT_ROBOT_STATE = DIG_RETRACT_SCOOP;
+    }
+  }
+  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_FOURBAR) {
+    if(PositionFourbar < FOURBAR_RETRACTION_LIMIT) {
+      this->CURRENT_ROBOT_STATE = DUMP;
+    }
+    else {
+      this->CURRENT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
+    }
+  }
+  /**
+   * State Behavior Machine
+   */
+
+  if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_ZERO);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HALF);
+  }
+  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_HALF);
+  }
+  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
+    this->srx.Set(ControlMode::PercentOutput,FOUR)
   }
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
@@ -121,7 +220,13 @@ void Robot::ReadAnalogChannel0Callback() {
   this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();;
   wpi::outs() << "Current AN_0_IN reading: " << this->AN_0_IN <<"\n";
 }
+double_t Robot::GetLinearActuatorTurnValue() {
+  double_t CurrentAnologReading = this->AN_0_IN;
 
+  double_t ScaledAnalogReading = (CurrentAnologReading- 0.0f)/ (5.0f - 0.0f)
+   * (10000.0f - 0.0f) + 0.0f;
+  return ScaledAnalogReading;
+}
 void Robot::InitializeTalonLinearActuator() {
   srx.ConfigFactoryDefault();
   SRX_LINACT.ConfigFactoryDefault();
@@ -180,7 +285,7 @@ void Robot::TeleopInit() {}
 void Robot::TeleopPeriodic() {
   double Left_Y_Stick = -1.0 * joystick.GetY();
   double Right_Y_Stick = -1.0 * joystick.GetRawAxis(5);
-
+  double_t LinActTurnValue = this->GetLinearActuatorTurnValue();
   if(fabs(Left_Y_Stick) < 0.10) {
     Left_Y_Stick = 0;
   }
@@ -204,12 +309,13 @@ void Robot::TeleopPeriodic() {
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
   }
+
+
+  
   else {
+
     srx.Set(ControlMode::PercentOutput,Left_Y_Stick);
     SRX_LINACT.Set(ControlMode::PercentOutput,Right_Y_Stick);
-  }
-  if(joystick.GetButtonCount()!=0) {
-    wpi::outs() << "number buttons pressed: " << joystick.GetButtonCount() << "\n";
   }
   if(joystick.GetRawButtonPressed(6)) {
     ++_smoothing;
