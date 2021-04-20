@@ -10,19 +10,19 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 
-#define FOURBAR_EXTENSION_LIMIT (4000.0)
-#define FOURBAR_RETRACTION_LIMIT (1000.0)
+#define FOURBAR_EXTENSION_LIMIT (-2000.0)
+#define FOURBAR_RETRACTION_LIMIT (5.0)
 
 #define SCOOP_EXTENSION_LIMIT (10.0)
 #define SCOOP_RETRACTION_LIMIT (1.0)
 //TODO Add negative (reverse direction) values
 #define FOURBAR_OUTPUT_ZERO (0.0)
-#define FOURBAR_OUTPUT_HALF (.5)
-#define FOURBAR_OUTPUT_FULL (1.0)
+#define FOURBAR_OUTPUT_HALF (.05)
+#define FOURBAR_OUTPUT_FULL (.10)
 
 #define LINACT_OUTPUT_ZERO (0.0)
-#define LINACT_OUTPUT_HALF (.5)
-#define LINACT_OUTPUT_FULL (1.0)
+#define LINACT_OUTPUT_HALF (.05)
+#define LINACT_OUTPUT_FULL (.10)
 
 
 void Robot::RobotInit() {
@@ -89,6 +89,9 @@ void Robot::AutonomousInit() {
   m_autoSelected = m_chooser.GetSelected();
   srx.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
+  this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),1_s,0_s);
+  
+
   // m_autoSelected = SmartDashboard::GetString("Auto Selector",
   //     kAutoNameDefault);
   std::cout << "Auto selected: " << m_autoSelected << std::endl;
@@ -118,10 +121,19 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
       return std::string("ERR");
   }
 }
+void Robot::DisplayRobotState() {
+  if(AutoPilot) {
+    wpi::outs() <<"Current State: " << this->GetStateAsString(this->CURRENT_ROBOT_STATE) <<
+    "\t Fourbar Abs: " << this->srx.GetSelectedSensorPosition()<< "\n";
+  }
+}
 /**
  * Should be general autonomous function, but for now it will be auto digger
  */
 void Robot::AutonomousPeriodic() {
+  if(!AutoPilot) {
+    AutoPilot = !AutoPilot;
+  }
   /**
    * Get important data about the state of the robot
    */
@@ -138,7 +150,10 @@ void Robot::AutonomousPeriodic() {
   }
   //Fourbar phase state
   else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
-    if(PositionFourbar > FOURBAR_EXTENSION_LIMIT) {
+    if(PositionFourbar < FOURBAR_EXTENSION_LIMIT) {
+      if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
+        this->CURRENT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
+      }
       this->CURRENT_ROBOT_STATE =  DIG_EXTEND_SCOOP;
     }
     else {
@@ -147,7 +162,7 @@ void Robot::AutonomousPeriodic() {
   }
   //Scoop phase state
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
-    if(PositionActuator > SCOOP_EXTENSION_LIMIT) {
+    if(PositionActuator < SCOOP_EXTENSION_LIMIT) {
       this->CURRENT_ROBOT_STATE = DIG_RETRACT_SCOOP;
     }
     else {
@@ -176,11 +191,11 @@ void Robot::AutonomousPeriodic() {
 
   if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
     this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_ZERO);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HALF);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_FULL);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_HALF);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_FULL);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,-(LINACT_OUTPUT_HALF));
@@ -218,7 +233,7 @@ void Robot::ReadPDPChannel(uint64_t channel) {
 }
 void Robot::ReadAnalogChannel0Callback() {
   this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();;
-  wpi::outs() << "Current AN_0_IN reading: " << this->AN_0_IN <<"\n";
+  //wpi::outs() << "Current AN_0_IN reading: " << this->AN_0_IN <<"\n";
 }
 double_t Robot::GetLinearActuatorTurnValue() {
   double_t CurrentAnologReading = this->AN_0_IN;
@@ -283,6 +298,9 @@ void Robot::InitializeTalonLinearActuator() {
 void Robot::TeleopInit() {}
 
 void Robot::TeleopPeriodic() {
+  if(AutoPilot) {
+    AutoPilot = false;
+  }
   double Left_Y_Stick = -1.0 * joystick.GetY();
   double Right_Y_Stick = -1.0 * joystick.GetRawAxis(5);
   double_t LinActTurnValue = this->GetLinearActuatorTurnValue();
