@@ -183,7 +183,7 @@ void Robot::AutonomousPeriodic() {
     this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_HALF);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    this->srx.Set(ControlMode::PercentOutput,FOUR)
+    this->srx.Set(ControlMode::PercentOutput,-(LINACT_OUTPUT_HALF));
   }
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
