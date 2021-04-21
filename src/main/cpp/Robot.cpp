@@ -170,7 +170,7 @@ void Robot::AutonomousPeriodic() {
   else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
     if(PositionFourbar < FOURBAR_EXTENSION_LIMIT) {
       if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
-        this->NEXT_ROBOT_STATE = HOLD;
+        this->NEXT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
       }
     }
     else {
@@ -221,6 +221,11 @@ void Robot::AutonomousPeriodic() {
     this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_ZERO);
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_FULL);
   }
+  else if (this->CURRENT_ROBOT_STATE == DIG_SLOW_EXTEND_FOURBAR) {
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
+  }
+  
+
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
     this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_FULL);
@@ -346,7 +351,7 @@ void Robot::TeleopPeriodic() {
 
   if(joystick.GetRawButton(1)) {
     wpi::outs() <<"Button 1 pressed, entering magic motion mode\n";
-    double TargetPos = Right_Y_Stick + 4096 * 10.0;
+    double TargetPos = Right_Y_Stick + 4096 * 1.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
   }
