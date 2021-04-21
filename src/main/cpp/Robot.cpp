@@ -29,8 +29,8 @@ void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+  frc::SmartDashboard::PutNumber("AN 0",this->AN_0_IN);
   this->InitializeAnalogInput(0,4);
-  wpi::outs() << "PDP Current: " << this->PDP.GetTotalCurrent() << "\n";
   
   this->InitializeTalonLinearActuator();
   this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
@@ -123,12 +123,33 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
 }
 void Robot::DisplayRobotState() {
   if(AutoPilot) {
-    wpi::outs() <<"Current State: " << this->GetStateAsString(this->CURRENT_ROBOT_STATE) <<
-    "\t Fourbar Abs: " << this->srx.GetSelectedSensorPosition()<< "\n";
+    std::string temp;
+    char buffer[128];
+    sprintf(buffer,"State: %s FB ABS: %0.2f FB %: %d Act Abs: %0.2f Act %: %d PDP TC: %0.2f\r",
+    this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str(),
+    this->srx.GetSelectedSensorPosition(),
+    this->srx.GetMotorOutputPercent()*100,
+    this->SRX_LINACT.GetSelectedSensorPosition(),
+    this->SRX_LINACT.GetMotorOutputPercent()*100,
+    this->PDP.GetTotalCurrent()
+    );
+    wpi::outs() << buffer;
+    /* <<"State: " << this->GetStateAsString(this->CURRENT_ROBOT_STATE) <<
+    " FB Abs: " << this->srx.GetSelectedSensorPosition() <<
+    " FB %: " << this->srx.GetMotorOutputPercent() << "%" <<
+    " Act Abs: " << this->SRX_LINACT.GetSelectedSensorPosition() <<
+    " Act %:" << this->SRX_LINACT.GetMotorOutputPercent() << "%" <<
+    " PDP TC: " << this->PDP.GetTotalCurrent() <<  "\r";
+    */
   }
 }
 /**
  * Should be general autonomous function, but for now it will be auto digger
+ * From starting position (0), fourbar motor needs to slowly (ControlMode::PercentOutput = 0.15)
+ * move until anywhere from absolute position -200 <-> -400 then slow down to (ControlMode::PercentOutput = 0.05)
+ * In order to hold current position while in extended mode, motor needs to be set to (ControlMode::PercentOutput = -0.15)
+ * 
+ * Estimated Full range until scoop actuation: 0 -> -7000
  */
 void Robot::AutonomousPeriodic() {
   if(!AutoPilot) {
@@ -146,45 +167,46 @@ void Robot::AutonomousPeriodic() {
    */
   //Reset State
   if(this->CURRENT_ROBOT_STATE == RESET) {
-    this->CURRENT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
+    this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
   }
   //Fourbar phase state
   else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
     if(PositionFourbar < FOURBAR_EXTENSION_LIMIT) {
       if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
-        this->CURRENT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
+        this->NEXT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
       }
-      this->CURRENT_ROBOT_STATE =  DIG_EXTEND_SCOOP;
+      this->NEXT_ROBOT_STATE =  DIG_EXTEND_SCOOP;
     }
     else {
-      this->CURRENT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
+      this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
     }
   }
   //Scoop phase state
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     if(PositionActuator < SCOOP_EXTENSION_LIMIT) {
-      this->CURRENT_ROBOT_STATE = DIG_RETRACT_SCOOP;
+      this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
     }
     else {
-      this->CURRENT_ROBOT_STATE = DIG_EXTEND_SCOOP;
+      this->NEXT_ROBOT_STATE = DIG_EXTEND_SCOOP;
     }
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
     if(PositionActuator < SCOOP_RETRACTION_LIMIT) {
-      this->CURRENT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
+      this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
     }
     else {
-      this->CURRENT_ROBOT_STATE = DIG_RETRACT_SCOOP;
+      this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
     }
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_FOURBAR) {
     if(PositionFourbar < FOURBAR_RETRACTION_LIMIT) {
-      this->CURRENT_ROBOT_STATE = DUMP;
+      this->NEXT_ROBOT_STATE = DUMP;
     }
     else {
-      this->CURRENT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
+      this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
     }
   }
+  this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
   /**
    * State Behavior Machine
    */
@@ -210,19 +232,15 @@ void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   }
   //this->VEC_ANALOG_IN[channel] = frc::AnalogInput(channel);
   this->VEC_ANALOG_IN[channel].SetOversampleBits(bits);
-  //wpi::outs() << "[+] Set analog input " << channel << " oversample rate to " << bits << " bits\n"; 
 }
 double_t Robot::ReadAnalogIn(uint64_t channel) {
   if(channel > 3) {
     perror("in initializeAnalogInput");
   }
   double_t AVG_Voltage = this->VEC_ANALOG_IN[channel].GetAverageVoltage(); 
-//  wpi::outs() << "[+] Read analog input " << channel << " : " << AVG_Voltage << " V (average volts)\n"; 
 
   return AVG_Voltage;
-    //uint64_t getValue = this->A0_IN.GetValue();
-    //uint64_t getAvgValue = this->A0_IN.GetAverageValue();
-    //wpi::outs() << AVG_Voltage << " " << getValue << " " << getAvgValue<< "\n"; 
+
 }
 void Robot::ReadPDPChannel(uint64_t channel) {
   if(channel > 15) {
@@ -233,7 +251,6 @@ void Robot::ReadPDPChannel(uint64_t channel) {
 }
 void Robot::ReadAnalogChannel0Callback() {
   this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();;
-  //wpi::outs() << "Current AN_0_IN reading: " << this->AN_0_IN <<"\n";
 }
 double_t Robot::GetLinearActuatorTurnValue() {
   double_t CurrentAnologReading = this->AN_0_IN;
