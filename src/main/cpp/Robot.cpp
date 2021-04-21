@@ -10,7 +10,9 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 
-#define FOURBAR_EXTENSION_LIMIT (-1000.0)
+#define FOURBAR_EXTENSION_LIMIT (-2500.0)
+#define FOURBAR_SLOW_HALF_START (-1000.0)
+#define FOURBAR_SLOW_FULL_START (-1700.0)
 #define FOURBAR_RETRACTION_LIMIT (5.0)
 
 #define SCOOP_EXTENSION_LIMIT (10.0)
@@ -19,7 +21,11 @@
 #define FOURBAR_OUTPUT_ZERO (0.0)
 #define FOURBAR_OUTPUT_HALF (.05)
 #define FOURBAR_OUTPUT_FULL (.10)
-#define FOURBAR_OUTPUT_HOLD (-.05)
+#define FOURBAR_OUTPUT_MIN_EXTEND_HOLD (0.0)
+#define FOURBAR_OUTPUT_HALF_EXTEND_HOLD (-0.05)
+#define FOURBAR_OUTPUT_FULL_EXTEND__HOLD (-0.10)
+
+
 #define LINACT_OUTPUT_ZERO (0.0)
 #define LINACT_OUTPUT_HALF (.05)
 #define LINACT_OUTPUT_FULL (.10)
@@ -172,6 +178,14 @@ void Robot::AutonomousPeriodic() {
       if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
         this->NEXT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
       }
+      else if(this->CURRENT_ROBOT_STATE== DIG_SLOW_EXTEND_FOURBAR) {
+        if(PositionFourbar < FOURBAR_SLOW_HALF_START && PositionFourbar > FOURBAR_SLOW_FULL_START)  {
+          this->NEXT_ROBOT_STATE = DIG_FOURBAR_HALF_HOLD;
+        }
+        else if(PositionFourbar > FOURBAR_EXTENSION_LIMIT && PositionFourbar  < FOURBAR_SLOW_FULL_START) {
+          this->NEXT_ROBOT_STATE = DIG_FOURBAR_FULL_HOLD;
+        }
+      }
     }
     else {
       this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
@@ -214,9 +228,12 @@ void Robot::AutonomousPeriodic() {
     this->SRX_LINACT.Set(ControlMode::PercentOutput, LINACT_OUTPUT_ZERO);
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
   }
+
   else if(this->CURRENT_ROBOT_STATE == HOLD) {
     this->SRX_LINACT.Set(ControlMode::PercentOutput, LINACT_OUTPUT_ZERO);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HOLD);  }
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HALF_EXTEND_HOLD); 
+  }
+
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
     this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_ZERO);
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_FULL);
@@ -224,7 +241,7 @@ void Robot::AutonomousPeriodic() {
   else if (this->CURRENT_ROBOT_STATE == DIG_SLOW_EXTEND_FOURBAR) {
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
   }
-  
+  /*
 
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
@@ -233,6 +250,7 @@ void Robot::AutonomousPeriodic() {
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,-(LINACT_OUTPUT_HALF));
   }
+  */
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   if(channel > 3) {
@@ -342,8 +360,6 @@ void Robot::TeleopPeriodic() {
 
   std::stringstream sb;
 
-
-
   if(joystick.GetRawButton(2)) {
     srx.SetSelectedSensorPosition(0,0,10);
     SRX_LINACT.SetSelectedSensorPosition(0,0,10);
@@ -351,16 +367,21 @@ void Robot::TeleopPeriodic() {
 
   if(joystick.GetRawButton(1)) {
     wpi::outs() <<"Button 1 pressed, entering magic motion mode\n";
-    double TargetPos = Right_Y_Stick + 4096 * 1.0;
+    double TargetPos = Right_Y_Stick + 2048 * 1.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
   }
-
-
   
   else {
-
-    srx.Set(ControlMode::PercentOutput,Left_Y_Stick);
+    double New_Left_Y = 0;
+    if (joystick.GetRawButtonPressed(3)){
+      New_Left_Y = Left_Y_Stick/3;
+    }
+    else if(joystick.GetRawButtonPressed(4)){
+      New_Left_Y = Left_Y_Stick;
+    }
+    else {New_Left_Y = Left_Y_Stick/6;}
+    srx.Set(ControlMode::PercentOutput,New_Left_Y);
     SRX_LINACT.Set(ControlMode::PercentOutput,Right_Y_Stick);
   }
   if(joystick.GetRawButtonPressed(6)) {
