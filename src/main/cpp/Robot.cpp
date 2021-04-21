@@ -10,7 +10,7 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 
-#define FOURBAR_EXTENSION_LIMIT (-2000.0)
+#define FOURBAR_EXTENSION_LIMIT (-1000.0)
 #define FOURBAR_RETRACTION_LIMIT (5.0)
 
 #define SCOOP_EXTENSION_LIMIT (10.0)
@@ -19,7 +19,7 @@
 #define FOURBAR_OUTPUT_ZERO (0.0)
 #define FOURBAR_OUTPUT_HALF (.05)
 #define FOURBAR_OUTPUT_FULL (.10)
-
+#define FOURBAR_OUTPUT_HOLD (-.05)
 #define LINACT_OUTPUT_ZERO (0.0)
 #define LINACT_OUTPUT_HALF (.05)
 #define LINACT_OUTPUT_FULL (.10)
@@ -34,7 +34,7 @@ void Robot::RobotInit() {
   
   this->InitializeTalonLinearActuator();
   this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
-  //this->AddPeriodic(std::bind(&Robot::DebugControllerButtons,this),1_s,1_s);
+  this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),1_s,0_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -89,7 +89,6 @@ void Robot::AutonomousInit() {
   m_autoSelected = m_chooser.GetSelected();
   srx.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
-  this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),1_s,0_s);
   
 
   // m_autoSelected = SmartDashboard::GetString("Auto Selector",
@@ -122,7 +121,6 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
   }
 }
 void Robot::DisplayRobotState() {
-  if(AutoPilot) {
     std::string temp;
     char buffer[128];
     sprintf(buffer,"State: %s FB ABS: %0.2f FB %: %d Act Abs: %0.2f Act %: %d PDP TC: %0.2f\r",
@@ -133,7 +131,8 @@ void Robot::DisplayRobotState() {
     this->SRX_LINACT.GetMotorOutputPercent()*100,
     this->PDP.GetTotalCurrent()
     );
-    wpi::outs() << buffer;
+    temp = buffer;
+    wpi::outs() << temp;
     /* <<"State: " << this->GetStateAsString(this->CURRENT_ROBOT_STATE) <<
     " FB Abs: " << this->srx.GetSelectedSensorPosition() <<
     " FB %: " << this->srx.GetMotorOutputPercent() << "%" <<
@@ -141,7 +140,7 @@ void Robot::DisplayRobotState() {
     " Act %:" << this->SRX_LINACT.GetMotorOutputPercent() << "%" <<
     " PDP TC: " << this->PDP.GetTotalCurrent() <<  "\r";
     */
-  }
+  
 }
 /**
  * Should be general autonomous function, but for now it will be auto digger
@@ -152,9 +151,7 @@ void Robot::DisplayRobotState() {
  * Estimated Full range until scoop actuation: 0 -> -7000
  */
 void Robot::AutonomousPeriodic() {
-  if(!AutoPilot) {
-    AutoPilot = !AutoPilot;
-  }
+
   /**
    * Get important data about the state of the robot
    */
@@ -173,14 +170,15 @@ void Robot::AutonomousPeriodic() {
   else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
     if(PositionFourbar < FOURBAR_EXTENSION_LIMIT) {
       if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
-        this->NEXT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
+        this->NEXT_ROBOT_STATE = HOLD;
       }
-      this->NEXT_ROBOT_STATE =  DIG_EXTEND_SCOOP;
     }
     else {
       this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
     }
   }
+  /*
+
   //Scoop phase state
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     if(PositionActuator < SCOOP_EXTENSION_LIMIT) {
@@ -206,12 +204,20 @@ void Robot::AutonomousPeriodic() {
       this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
     }
   }
+  */
   this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
+  
   /**
    * State Behavior Machine
    */
-
-  if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
+  if(this->CURRENT_ROBOT_STATE == RESET) {
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, LINACT_OUTPUT_ZERO);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
+  }
+  else if(this->CURRENT_ROBOT_STATE == HOLD) {
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, LINACT_OUTPUT_ZERO);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HOLD);  }
+  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
     this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_ZERO);
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_FULL);
   }
