@@ -10,7 +10,7 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 
-#define FOURBAR_EXTENSION_LIMIT (-2500.0)
+#define FOURBAR_EXTENSION_LIMIT (-3800.0)
 #define FOURBAR_SLOW_HALF_START (-1000.0)
 #define FOURBAR_SLOW_FULL_START (-1700.0)
 #define FOURBAR_RETRACTION_LIMIT (5.0)
@@ -349,7 +349,6 @@ void Robot::TeleopPeriodic() {
   }
   double Left_Y_Stick = -1.0 * joystick.GetY();
   double Right_Y_Stick = -1.0 * joystick.GetRawAxis(3);
-  wpi::outs() << "RS: " << Right_Y_Stick << "\n";
   double_t LinActTurnValue = this->GetLinearActuatorTurnValue();
   if(fabs(Left_Y_Stick) < 0.10) {
     Left_Y_Stick = 0;
