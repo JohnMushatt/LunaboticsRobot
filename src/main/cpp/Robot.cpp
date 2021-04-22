@@ -10,13 +10,13 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 
-#define FOURBAR_EXTENSION_LIMIT (-3800.0)
+#define FOURBAR_EXTENSION_LIMIT (4200.0)
 #define FOURBAR_SLOW_HALF_START (-1000.0)
 #define FOURBAR_SLOW_FULL_START (-1700.0)
-#define FOURBAR_RETRACTION_LIMIT (5.0)
+#define FOURBAR_RETRACTION_LIMIT (100.0)
 
-#define SCOOP_EXTENSION_LIMIT (10.0)
-#define SCOOP_RETRACTION_LIMIT (1.0)
+#define SCOOP_EXTENSION_LIMIT (2500.0)
+#define SCOOP_RETRACTION_LIMIT (100.0)
 //TODO Add negative (reverse direction) values
 #define FOURBAR_OUTPUT_ZERO (0.0)
 #define FOURBAR_OUTPUT_HALF (.05)
@@ -25,10 +25,9 @@
 #define FOURBAR_OUTPUT_HALF_EXTEND_HOLD (-0.05)
 #define FOURBAR_OUTPUT_FULL_EXTEND__HOLD (-0.10)
 
-
-#define LINACT_OUTPUT_ZERO (0.0)
-#define LINACT_OUTPUT_HALF (.05)
-#define LINACT_OUTPUT_FULL (.10)
+#define SCOOP_HOLD_OUTPUT (0.0)
+#define SCOOP_EXTEND_OUTPUT (-0.30)
+#define SCOOP_RETRACT_OUTPUT (0.30)
 
 
 void Robot::RobotInit() {
@@ -40,7 +39,7 @@ void Robot::RobotInit() {
   
   this->InitializeTalonLinearActuator();
   this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
-  this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),1_s,0_s);
+  //this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),2_s,0_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -129,13 +128,12 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
 void Robot::DisplayRobotState() {
     std::string temp;
     char buffer[128];
-    sprintf(buffer,"State: %s FB ABS: %0.2f FB %: %d Act Abs: %0.2f Act %: %d PDP TC: %0.2f\r",
+    sprintf(buffer,"%s FB ABS: %0.2f Act Abs: %0.2f SRX1 Pos: %0.2f SRX0 Current: %0.2f\r",
     this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str(),
     this->srx.GetSelectedSensorPosition(),
-    this->srx.GetMotorOutputPercent()*100,
     this->SRX_LINACT.GetSelectedSensorPosition(),
-    this->SRX_LINACT.GetMotorOutputPercent()*100,
-    this->PDP.GetTotalCurrent()
+    this->GetLinearActuatorTurnValue(),
+    this->PDP.GetCurrent(0)
     );
     temp = buffer;
     wpi::outs() << temp;
@@ -165,6 +163,9 @@ void Robot::AutonomousPeriodic() {
   double_t PositionActuator = this->GetLinearActuatorTurnValue();
   double_t CurrentDraw_LinearActuator = this->PDP.GetCurrent(PDPChannel_LinearActuator);
   double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+  char buffer[128];
+  sprintf(buffer, "%0.2f %0.2f %s\n ",PositionFourbar, PositionActuator,this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str());
+  wpi::outs() << buffer << "\n";
   /**
    * State Machine
    */
@@ -175,6 +176,7 @@ void Robot::AutonomousPeriodic() {
   //Fourbar phase state
   else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
     if(PositionFourbar < FOURBAR_EXTENSION_LIMIT) {
+      /*
       if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
         this->NEXT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
       }
@@ -187,70 +189,71 @@ void Robot::AutonomousPeriodic() {
         }
       }
     }
-    else {
+    */
       this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
-    }
-  }
-  /*
-
-  //Scoop phase state
-  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
-    if(PositionActuator < SCOOP_EXTENSION_LIMIT) {
-      this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
     }
     else {
       this->NEXT_ROBOT_STATE = DIG_EXTEND_SCOOP;
     }
   }
-  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    if(PositionActuator < SCOOP_RETRACTION_LIMIT) {
-      this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
+
+  
+  
+  //Scoop phase state
+  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
+    if(PositionActuator < SCOOP_EXTENSION_LIMIT) {
+      this->NEXT_ROBOT_STATE = DIG_EXTEND_SCOOP;
     }
     else {
       this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
     }
   }
+  
+  
+  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
+    if(PositionActuator > SCOOP_RETRACTION_LIMIT) {
+      this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
+    }
+    else {
+      this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
+    }
+  }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_FOURBAR) {
-    if(PositionFourbar < FOURBAR_RETRACTION_LIMIT) {
+    if(PositionFourbar > FOURBAR_RETRACTION_LIMIT) {
       this->NEXT_ROBOT_STATE = DUMP;
     }
     else {
       this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
     }
   }
-  */
+  
   this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
   
   /**
    * State Behavior Machine
    */
   if(this->CURRENT_ROBOT_STATE == RESET) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, LINACT_OUTPUT_ZERO);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_HOLD_OUTPUT);
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
   }
 
   else if(this->CURRENT_ROBOT_STATE == HOLD) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, LINACT_OUTPUT_ZERO);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_HOLD_OUTPUT);
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HALF_EXTEND_HOLD); 
   }
 
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_ZERO);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_FULL);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_HOLD_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,0.2);
   }
-  else if (this->CURRENT_ROBOT_STATE == DIG_SLOW_EXTEND_FOURBAR) {
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
-  }
-  /*
-
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,LINACT_OUTPUT_FULL);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_EXTEND_OUTPUT);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    this->srx.Set(ControlMode::PercentOutput,-(LINACT_OUTPUT_HALF));
+    this->srx.Set(ControlMode::PercentOutput,SCOOP_RETRACT_OUTPUT);
   }
-  */
+
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   if(channel > 3) {
@@ -279,10 +282,10 @@ void Robot::ReadPDPChannel(uint64_t channel) {
   frc::SmartDashboard::PutNumber(std::string("Current Channel " + channel),Reading);
 }
 void Robot::ReadAnalogChannel0Callback() {
-  this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();;
+  this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();
 }
 double_t Robot::GetLinearActuatorTurnValue() {
-  double_t CurrentAnologReading = this->AN_0_IN;
+  double_t CurrentAnologReading = this->VEC_ANALOG_IN[0].GetAverageVoltage();
 
   double_t ScaledAnalogReading = (CurrentAnologReading- 0.0f)/ (5.0f - 0.0f)
    * (10000.0f - 0.0f) + 0.0f;
