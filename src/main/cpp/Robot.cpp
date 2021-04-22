@@ -348,7 +348,8 @@ void Robot::TeleopPeriodic() {
     AutoPilot = false;
   }
   double Left_Y_Stick = -1.0 * joystick.GetY();
-  double Right_Y_Stick = -1.0 * joystick.GetRawAxis(5);
+  double Right_Y_Stick = -1.0 * joystick.GetRawAxis(3);
+  wpi::outs() << "RS: " << Right_Y_Stick << "\n";
   double_t LinActTurnValue = this->GetLinearActuatorTurnValue();
   if(fabs(Left_Y_Stick) < 0.10) {
     Left_Y_Stick = 0;
@@ -365,9 +366,9 @@ void Robot::TeleopPeriodic() {
     SRX_LINACT.SetSelectedSensorPosition(0,0,10);
   }
 
-  if(joystick.GetRawButton(1)) {
+  if(joystick.GetRawButton(3)) {
     wpi::outs() <<"Button 1 pressed, entering magic motion mode\n";
-    double TargetPos = Right_Y_Stick + 2048 * 1.0;
+    double TargetPos = Right_Y_Stick + 4096 * 10.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
   }
@@ -380,7 +381,9 @@ void Robot::TeleopPeriodic() {
     else if(joystick.GetRawButtonPressed(4)){
       New_Left_Y = Left_Y_Stick;
     }
-    else {New_Left_Y = Left_Y_Stick/6;}
+    else {
+      New_Left_Y = Left_Y_Stick/6;
+    }
     srx.Set(ControlMode::PercentOutput,New_Left_Y);
     SRX_LINACT.Set(ControlMode::PercentOutput,Right_Y_Stick);
   }
