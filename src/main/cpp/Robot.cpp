@@ -74,8 +74,6 @@ void Robot::DebugControllerButtons() {
  * LiveWindow and SmartDashboard integrated updating.
  */
 void Robot::RobotPeriodic() {
-      //double_t res = this->ReadAnalogIn(0);
-
 }
 
 /**
