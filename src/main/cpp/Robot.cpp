@@ -39,7 +39,7 @@ void Robot::RobotInit() {
   
   this->InitializeTalonLinearActuator();
   this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
-  //this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),2_s,0_s);
+  this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),2_s,0_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -126,6 +126,8 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
 void Robot::DisplayRobotState() {
     std::string temp;
     char buffer[128];
+    sprintf(buffer,"%0.2f %0.2f\n",  this->srx.GetOutputCurrent(),this->SRX_LINACT.GetOutputCurrent());
+    /*
     sprintf(buffer,"%s FB ABS: %0.2f Act Abs: %0.2f SRX1 Pos: %0.2f SRX0 Current: %0.2f\r",
     this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str(),
     this->srx.GetSelectedSensorPosition(),
@@ -133,6 +135,7 @@ void Robot::DisplayRobotState() {
     this->GetLinearActuatorTurnValue(),
     this->PDP.GetCurrent(0)
     );
+    */
     temp = buffer;
     wpi::outs() << temp;
     /* <<"State: " << this->GetStateAsString(this->CURRENT_ROBOT_STATE) <<
@@ -162,8 +165,8 @@ void Robot::AutonomousPeriodic() {
   double_t CurrentDraw_LinearActuator = this->PDP.GetCurrent(PDPChannel_LinearActuator);
   double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
   char buffer[128];
-  sprintf(buffer, "%0.2f %0.2f %s\n ",PositionFourbar, PositionActuator,this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str());
-  wpi::outs() << buffer << "\n";
+  //sprintf(buffer,"%0.2f %0.2f\n",  this->srx.GetOutputCurrent(),this->SRX_LINACT.GetOutputCurrent());//"%0.2f %0.2f %s\n ",PositionFourbar, PositionActuator,this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str());
+  //wpi::outs() << buffer << "\n";
   /**
    * State Machine
    */
@@ -351,6 +354,8 @@ void Robot::TeleopPeriodic() {
   double Left_Y_Stick = -1.0 * joystick.GetY();
   double Right_Y_Stick = -1.0 * joystick.GetRawAxis(3);
   double_t LinActTurnValue = this->GetLinearActuatorTurnValue();
+  
+
   if(fabs(Left_Y_Stick) < 0.10) {
     Left_Y_Stick = 0;
   }
@@ -366,11 +371,18 @@ void Robot::TeleopPeriodic() {
     SRX_LINACT.SetSelectedSensorPosition(0,0,10);
   }
 
-  if(joystick.GetRawButton(3)) {
+  else if(joystick.GetRawButton(3)) {
+    srx.Set(ControlMode::PercentOutput,1.0);
+    /*
     wpi::outs() <<"Button 1 pressed, entering magic motion mode\n";
     double TargetPos = Right_Y_Stick + 4096 * 10.0;
     srx.Set(ControlMode::MotionMagic,TargetPos);
     SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
+    */
+
+  }
+  else if(joystick.GetRawButton(1)) {
+    srx.Set(ControlMode::PercentOutput,-1.0);
   }
   
   else {
@@ -382,9 +394,12 @@ void Robot::TeleopPeriodic() {
       New_Left_Y = Left_Y_Stick;
     }
     else {
-      New_Left_Y = Left_Y_Stick/6;
+      New_Left_Y = Left_Y_Stick * .9;
     }
     srx.Set(ControlMode::PercentOutput,New_Left_Y);
+    if(Right_Y_Stick > 0) {
+      SRX_LINACT.Set(ControlMode::PercentOutput,1);
+    }
     SRX_LINACT.Set(ControlMode::PercentOutput,Right_Y_Stick);
   }
   if(joystick.GetRawButtonPressed(6)) {
