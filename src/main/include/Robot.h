@@ -34,16 +34,25 @@ class Robot : public frc::TimedRobot {
   double_t GetLinearActuatorTurnValue();
  private:
   int _smoothing;
-  bool AutoPilot = false;
+
+  /**
+   * Auto pilot variables and functions
+   */
   enum ROBOT_STATE {RESET,
-  DIG_EXTEND_FOURBAR,DIG_SLOW_EXTEND_FOURBAR,
-  DIG_FOURBAR_FULL_HOLD, DIG_FOURBAR_HALF_HOLD,
-  DIG_RETRACT_FOURBAR,
-  DIG_EXTEND_SCOOP,
-  DIG_RETRACT_SCOOP,DUMP,ERR,DONE,HOLD};
+  DIG_EXTEND_FOURBAR,  DIG_RETRACT_FOURBAR,
+  DIG_EXTEND_SCOOP,  DIG_RETRACT_SCOOP,
+  DUMP_EXTEND_SCOOP, DUMP_RETRACT_SCOOP
+  ,ERR,DONE,HOLD};
   ROBOT_STATE CURRENT_ROBOT_STATE;
   ROBOT_STATE NEXT_ROBOT_STATE;
+  bool AutoPilot = false;
+  bool AutoPilotStarted = false;
+  size_t AutoCycleCount = 0;
+  double_t GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState);
   std::string GetStateAsString(ROBOT_STATE state);
+
+
+
   void DisplayRobotState();
   void ReadPDPChannel(uint64_t channel);
   double_t ReadAnalogIn(uint64_t channel);

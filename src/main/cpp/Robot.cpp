@@ -39,7 +39,7 @@ void Robot::RobotInit() {
   
   this->InitializeTalonLinearActuator();
   this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
-  this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),2_s,0_s);
+  //this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),2_s,0_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -117,34 +117,43 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
       return std::string("DIG_RETRACT_FOURBAR");    
     case ROBOT_STATE::DIG_RETRACT_SCOOP:
       return std::string("DIG_RETRACT_SCOOP");    
-    case ROBOT_STATE::DUMP:
-      return std::string("DONE");    
+    //case ROBOT_STATE::DUMP:
+      //return std::string("DONE");    
     default:
       return std::string("ERR");
+  }
+}
+double_t Robot::GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
+  if(CycleCount == 0) {
+    if (CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+      return FOURBAR_EXTENSION_LIMIT;
+    }
+    else if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP)
+    {
+      return SCOOP_EXTENSION_LIMIT;
+    }
+    else if(CurrentState == ROBOT_STATE::DIG_RETRACT_SCOOP) {
+      return SCOOP_RETRACTION_LIMIT;
+    }
+    else if(CurrentState == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+      return FOURBAR_RETRACTION_LIMIT;
+    }
+    else if(CurrentState == ROBOT_STATE::DUMP_EXTEND_SCOOP) {
+      return SCOOP_EXTENSION_LIMIT;
+    }
+    else if(CurrentState ==ROBOT_STATE::DUMP_RETRACT_SCOOP) {
+      return SCOOP_RETRACTION_LIMIT;
+    }
+    
   }
 }
 void Robot::DisplayRobotState() {
     std::string temp;
     char buffer[128];
-    sprintf(buffer,"%0.2f %0.2f\n",  this->srx.GetOutputCurrent(),this->SRX_LINACT.GetOutputCurrent());
-    /*
-    sprintf(buffer,"%s FB ABS: %0.2f Act Abs: %0.2f SRX1 Pos: %0.2f SRX0 Current: %0.2f\r",
-    this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str(),
-    this->srx.GetSelectedSensorPosition(),
-    this->SRX_LINACT.GetSelectedSensorPosition(),
-    this->GetLinearActuatorTurnValue(),
-    this->PDP.GetCurrent(0)
-    );
-    */
+    sprintf(buffer,"Fourbar: [Pos: %0.2f,Current: %0.2fA] Lin: [Pos: %0.2f,Current: %0.2fA]\r",  this->srx.GetSelectedSensorPosition(),
+    this->srx.GetOutputCurrent(),this->GetLinearActuatorTurnValue(),this->SRX_LINACT.GetOutputCurrent());
     temp = buffer;
     wpi::outs() << temp;
-    /* <<"State: " << this->GetStateAsString(this->CURRENT_ROBOT_STATE) <<
-    " FB Abs: " << this->srx.GetSelectedSensorPosition() <<
-    " FB %: " << this->srx.GetMotorOutputPercent() << "%" <<
-    " Act Abs: " << this->SRX_LINACT.GetSelectedSensorPosition() <<
-    " Act %:" << this->SRX_LINACT.GetMotorOutputPercent() << "%" <<
-    " PDP TC: " << this->PDP.GetTotalCurrent() <<  "\r";
-    */
   
 }
 /**
@@ -164,70 +173,56 @@ void Robot::AutonomousPeriodic() {
   double_t PositionActuator = this->GetLinearActuatorTurnValue();
   double_t CurrentDraw_LinearActuator = this->PDP.GetCurrent(PDPChannel_LinearActuator);
   double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
-  char buffer[128];
-  //sprintf(buffer,"%0.2f %0.2f\n",  this->srx.GetOutputCurrent(),this->SRX_LINACT.GetOutputCurrent());//"%0.2f %0.2f %s\n ",PositionFourbar, PositionActuator,this->GetStateAsString(this->CURRENT_ROBOT_STATE).c_str());
-  //wpi::outs() << buffer << "\n";
+  double_t CurrentThresholdValue = this->GetThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
+
   /**
    * State Machine
    */
-  //Reset State
+  //Reset state, go to DIG_EXTEND_FOURBAR
   if(this->CURRENT_ROBOT_STATE == RESET) {
-    this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
+    this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
   }
-  //Fourbar phase state
-  else if(this->CURRENT_ROBOT_STATE==DIG_EXTEND_FOURBAR) {
-    if(PositionFourbar < FOURBAR_EXTENSION_LIMIT) {
-      /*
-      if(PositionFourbar < FOURBAR_EXTENSION_LIMIT / 5) {
-        this->NEXT_ROBOT_STATE = DIG_SLOW_EXTEND_FOURBAR;
-      }
-      else if(this->CURRENT_ROBOT_STATE== DIG_SLOW_EXTEND_FOURBAR) {
-        if(PositionFourbar < FOURBAR_SLOW_HALF_START && PositionFourbar > FOURBAR_SLOW_FULL_START)  {
-          this->NEXT_ROBOT_STATE = DIG_FOURBAR_HALF_HOLD;
-        }
-        else if(PositionFourbar > FOURBAR_EXTENSION_LIMIT && PositionFourbar  < FOURBAR_SLOW_FULL_START) {
-          this->NEXT_ROBOT_STATE = DIG_FOURBAR_FULL_HOLD;
-        }
-      }
-    }
-    */
-      this->NEXT_ROBOT_STATE = DIG_EXTEND_FOURBAR;
+  //Extend fourbar state
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+
+    if(PositionFourbar < CurrentThresholdValue) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
     }
     else {
-      this->NEXT_ROBOT_STATE = DIG_EXTEND_SCOOP;
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
     }
+  }
+  //Extend scoop state
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
+    if(PositionActuator < CurrentThresholdValue) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
+    }
+    else {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_SCOOP;
+    }
+  }
+  //Retract scoop state
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_SCOOP) {
+    if(PositionActuator > CurrentThresholdValue) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_SCOOP;
+    }
+    else {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
+    }
+  }
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+    if(PositionFourbar > CurrentThresholdValue) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
+    }
+    else {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_EXTEND_SCOOP;
+    }
+  }
+  else {
+    this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
   }
 
-  
-  
-  //Scoop phase state
-  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
-    if(PositionActuator < SCOOP_EXTENSION_LIMIT) {
-      this->NEXT_ROBOT_STATE = DIG_EXTEND_SCOOP;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
-    }
-  }
-  
-  
-  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    if(PositionActuator > SCOOP_RETRACTION_LIMIT) {
-      this->NEXT_ROBOT_STATE = DIG_RETRACT_SCOOP;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
-    }
-  }
-  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_FOURBAR) {
-    if(PositionFourbar > FOURBAR_RETRACTION_LIMIT) {
-      this->NEXT_ROBOT_STATE = DUMP;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = DIG_RETRACT_FOURBAR;
-    }
-  }
-  
+  //Retract 
   this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
   
   /**
@@ -239,22 +234,28 @@ void Robot::AutonomousPeriodic() {
   }
 
   else if(this->CURRENT_ROBOT_STATE == HOLD) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_HOLD_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_HALF_EXTEND_HOLD); 
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, 0.0);
+    this->srx.Set(ControlMode::PercentOutput, 0.0); 
   }
 
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_HOLD_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,0.2);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,0);
+    this->srx.Set(ControlMode::PercentOutput,.9);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
     this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_EXTEND_OUTPUT);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,-.9);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    this->srx.Set(ControlMode::PercentOutput,SCOOP_RETRACT_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,.9);
   }
-
+  else {
+    this->srx.Set(ControlMode::PercentOutput,0);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,0);
+  }
+  if(this->joystick.GetRawButton(8)) {
+    this->DisplayRobotState();
+  }
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   if(channel > 3) {
@@ -365,7 +366,9 @@ void Robot::TeleopPeriodic() {
   double MotorOuput = srx.GetMotorOutputPercent();
 
   std::stringstream sb;
-
+  if(joystick.GetRawButton(8)) {
+    this->DisplayRobotState();
+  }
   if(joystick.GetRawButton(2)) {
     srx.SetSelectedSensorPosition(0,0,10);
     SRX_LINACT.SetSelectedSensorPosition(0,0,10);
