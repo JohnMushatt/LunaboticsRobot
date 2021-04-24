@@ -10,13 +10,13 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 //Fourbar dig motor positions
-#define FOURBAR_DIG_EXTENSION_LIMIT (4000.0)
+#define FOURBAR_DIG_EXTENSION_LIMIT (3800.0)
 #define FOURBAR_DIG_RETRACTION_LIMIT (100.0)
 //Scoop dig motor positions
-#define SCOOP_EXTENSION_LIMIT (2000.0)
-#define SCOOP_RETRACTION_LIMIT (200.0)
+#define SCOOP_EXTENSION_LIMIT (4500.0)
+#define SCOOP_RETRACTION_LIMIT (510.0)
 //Fourbar dump motor positions
-#define FOURBAR_DUMP_POSITION (1000)
+#define FOURBAR_DUMP_POSITION (100)
 //Scoop dump motor positions
 #define SCOOP_DUMP_POSITION (1000)
 //Fourbar motor output values
@@ -25,8 +25,8 @@
 #define FOURBAR_RETRACT_OUTPUT (-0.90)
 //Scoop motor output values
 #define SCOOP_ZERO_OUTPUT (0.0)
-#define SCOOP_EXTEND_OUTPUT (0.90)
-#define SCOOP_RETRACT_OUTPUT (-0.90)
+#define SCOOP_EXTEND_OUTPUT (-0.90)
+#define SCOOP_RETRACT_OUTPUT (0.90)
 
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
@@ -57,6 +57,28 @@ void Robot::SimulationPeriodic() {
  * LiveWindow and SmartDashboard integrated updating.
  */
 void Robot::RobotPeriodic() {
+  
+  /**
+   * Positional Information
+   */
+  double_t PositionActuator = this->GetLinearActuatorTurnValue();
+  double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+  double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
+  /**
+   * Current Information
+   */
+  double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
+  double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
+    //Update SmartDashbord
+  frc::SmartDashboard::PutNumber("Actuator Position",PositionActuator);
+  frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
+  frc::SmartDashboard::PutString("Current Robot State",this->GetStateAsString(this->CURRENT_ROBOT_STATE));
+  frc::SmartDashboard::PutNumber("Linear Actuator Current",LinearActuatorCurrent);
+
+  frc::SmartDashboard::PutNumber("Linear Actuactor Motor Output",this->SRX_LINACT.GetMotorOutputPercent());
+  frc::SmartDashboard::PutNumber("Fourbar Motor Output",this->srx.GetMotorOutputPercent());
+  frc::SmartDashboard::PutNumber("Position Threshold",PositionThresholdValue);
+  frc::SmartDashboard::PutBoolean("Current Exceed Safe Value? ", LinearActuatorCurrent >= CurrentThresholdValue);
 }
 
 /**
@@ -140,13 +162,7 @@ double_t Robot::GetCurrentThresholdValue(ROBOT_STATE CurrentState) {
   }
 }
 void Robot::DisplayRobotState() {
-    std::string temp;
-    char buffer[128];
-    sprintf(buffer,"Fourbar: [Pos: %0.2f,Current: %0.2fA] Lin: [Pos: %0.2f,Current: %0.2fA]\r",  this->srx.GetSelectedSensorPosition(),
-    this->srx.GetOutputCurrent(),this->GetLinearActuatorTurnValue(),this->SRX_LINACT.GetOutputCurrent());
-    temp = buffer;
-    wpi::outs() << temp;
-    frc::SmartDashboard::PutString("Robote State", temp);
+    
 
   
 }
@@ -171,6 +187,10 @@ void Robot::AutonomousPeriodic() {
    */
   double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
   double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
+  
+
+
+  
   /**
    * State Machine
    */
@@ -194,7 +214,7 @@ void Robot::AutonomousPeriodic() {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
     }
     else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_SCOOP;
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
     }
   }
   //Retract scoop state
@@ -229,36 +249,48 @@ void Robot::AutonomousPeriodic() {
   /**
    * State Behavior Machine
    */
+  double_t MotorOutputScoop= 0.0;
+  double_t MotorOutputFourbar = 0.0;
   if(this->CURRENT_ROBOT_STATE == RESET) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_ZERO_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
+    MotorOutputScoop = SCOOP_ZERO_OUTPUT;
+    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
 
   else if(this->CURRENT_ROBOT_STATE == HOLD) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_ZERO_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput, FOURBAR_ZERO_OUTPUT); 
+    MotorOutputScoop = SCOOP_ZERO_OUTPUT;
+    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
 
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_ZERO_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_EXTEND_OUTPUT);
+    MotorOutputScoop = SCOOP_EXTEND_OUTPUT;
+    MotorOutputFourbar = FOURBAR_EXTEND_OUTPUT;
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_EXTEND_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
+    MotorOutputScoop =  SCOOP_EXTEND_OUTPUT;
+    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
 
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_RETRACT_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
+    MotorOutputScoop = SCOOP_RETRACT_OUTPUT;
+    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
+  }
+  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_FOURBAR) {
+    MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
+    MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
   }
   else {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_ZERO_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
+    MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
+    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
+  //Step debug function to try to debug things within the state machine
+  if(!this->joystick.GetRawButton(2)) {
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
+    this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
+  }
+  else {
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,0.0);
+    this->srx.Set(ControlMode::PercentOutput,0.0);
 
-  if(this->joystick.GetRawButton(8)) {
-    this->DisplayRobotState();
   }
  
 }
@@ -267,7 +299,7 @@ void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
     perror("in initializeAnalogInput");
   }
   if(this->VEC_ANALOG_IN.size()==0 || this->VEC_ANALOG_IN.size() < channel) {
-    this->VEC_ANALOG_IN.push_back(frc::AnalogInput(channel));
+    this->VEC_ANALOG_IN.push_back(frc::AnalogInput(channel))  ;
   }
   //this->VEC_ANALOG_IN[channel] = frc::AnalogInput(channel);
   this->VEC_ANALOG_IN[channel].SetOversampleBits(bits);
