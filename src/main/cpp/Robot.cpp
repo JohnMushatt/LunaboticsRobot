@@ -9,26 +9,24 @@
 #include <frc/smartdashboard/SmartDashboard.h>
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
-
-#define FOURBAR_EXTENSION_LIMIT (4200.0)
-#define FOURBAR_SLOW_HALF_START (-1000.0)
-#define FOURBAR_SLOW_FULL_START (-1700.0)
-#define FOURBAR_RETRACTION_LIMIT (100.0)
-
-#define SCOOP_EXTENSION_LIMIT (2500.0)
-#define SCOOP_RETRACTION_LIMIT (100.0)
-//TODO Add negative (reverse direction) values
-#define FOURBAR_OUTPUT_ZERO (0.0)
-#define FOURBAR_OUTPUT_HALF (.05)
-#define FOURBAR_OUTPUT_FULL (.10)
-#define FOURBAR_OUTPUT_MIN_EXTEND_HOLD (0.0)
-#define FOURBAR_OUTPUT_HALF_EXTEND_HOLD (-0.05)
-#define FOURBAR_OUTPUT_FULL_EXTEND__HOLD (-0.10)
-
-#define SCOOP_HOLD_OUTPUT (0.0)
-#define SCOOP_EXTEND_OUTPUT (-0.30)
-#define SCOOP_RETRACT_OUTPUT (0.30)
-
+//Fourbar dig motor positions
+#define FOURBAR_DIG_EXTENSION_LIMIT (4000.0)
+#define FOURBAR_DIG_RETRACTION_LIMIT (100.0)
+//Scoop dig motor positions
+#define SCOOP_EXTENSION_LIMIT (2000.0)
+#define SCOOP_RETRACTION_LIMIT (200.0)
+//Fourbar dump motor positions
+#define FOURBAR_DUMP_POSITION (1000)
+//Scoop dump motor positions
+#define SCOOP_DUMP_POSITION (1000)
+//Fourbar motor output values
+#define FOURBAR_ZERO_OUTPUT (0.0)
+#define FOURBAR_EXTEND_OUTPUT (0.90)
+#define FOURBAR_RETRACT_OUTPUT (-0.90)
+//Scoop motor output values
+#define SCOOP_ZERO_OUTPUT (0.0)
+#define SCOOP_EXTEND_OUTPUT (0.90)
+#define SCOOP_RETRACT_OUTPUT (-0.90)
 
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
@@ -49,22 +47,7 @@ void Robot::SimulationInit() {
 void Robot::SimulationPeriodic() {
   PhysicsSim::GetInstance().Run();
 }
-void Robot::DebugControllerButtons() {
-  
-  int TotalButtons = this->joystick.GetButtonCount();
-  for(size_t ButtonIndex = 1; ButtonIndex < TotalButtons; ButtonIndex++) {
-    if(this->joystick.GetRawButtonPressed(ButtonIndex)) {
-      wpi::outs() << "Button " << ButtonIndex << " has been pressed\n";
-    }
-  }
-  int TotalAxis = this->joystick.GetAxisCount();
-  for(size_t AxisIndex = 0; AxisIndex < TotalAxis;AxisIndex++) {
-    if(this->joystick.GetRawAxis(AxisIndex)) {
-      wpi::outs() << "Axis " << AxisIndex << " w/ type " << this->joystick.GetAxisType(AxisIndex) << " @ " 
-      << this->joystick.GetRawAxis(AxisIndex) << "\n";
-    }
-  }
-}
+
 /**
  * This function is called every robot packet, no matter the mode. Use
  * this for items like diagnostics that you want ran during disabled,
@@ -116,9 +99,13 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
     case ROBOT_STATE::DIG_RETRACT_FOURBAR:
       return std::string("DIG_RETRACT_FOURBAR");    
     case ROBOT_STATE::DIG_RETRACT_SCOOP:
-      return std::string("DIG_RETRACT_SCOOP");    
-    //case ROBOT_STATE::DUMP:
-      //return std::string("DONE");    
+      return std::string("DIG_RETRACT_SCOOP");
+    case ROBOT_STATE::DUMP_EXTEND_SCOOP:
+      return std::string("DUMP_EXTEND_SCOOP");
+    case ROBOT_STATE::DUMP_RETRACT_SCOOP:
+      return std::string("DUMP_RETRACT_SCOOP");
+    case ROBOT_STATE::HOLD:
+      return std::string("HOLD");
     default:
       return std::string("ERR");
   }
@@ -126,7 +113,7 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
 double_t Robot::GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
   if(CycleCount == 0) {
     if (CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
-      return FOURBAR_EXTENSION_LIMIT;
+      return FOURBAR_DIG_EXTENSION_LIMIT;
     }
     else if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP)
     {
@@ -136,10 +123,10 @@ double_t Robot::GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
       return SCOOP_RETRACTION_LIMIT;
     }
     else if(CurrentState == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
-      return FOURBAR_RETRACTION_LIMIT;
+      return FOURBAR_DIG_RETRACTION_LIMIT;
     }
     else if(CurrentState == ROBOT_STATE::DUMP_EXTEND_SCOOP) {
-      return SCOOP_EXTENSION_LIMIT;
+      return SCOOP_DUMP_POSITION;
     }
     else if(CurrentState ==ROBOT_STATE::DUMP_RETRACT_SCOOP) {
       return SCOOP_RETRACTION_LIMIT;
@@ -154,6 +141,8 @@ void Robot::DisplayRobotState() {
     this->srx.GetOutputCurrent(),this->GetLinearActuatorTurnValue(),this->SRX_LINACT.GetOutputCurrent());
     temp = buffer;
     wpi::outs() << temp;
+    frc::SmartDashboard::PutString("Robote State", temp);
+
   
 }
 /**
@@ -169,11 +158,11 @@ void Robot::AutonomousPeriodic() {
   /**
    * Get important data about the state of the robot
    */
-  //wpi::outs() << "Current State: " << ""
   double_t PositionActuator = this->GetLinearActuatorTurnValue();
-  double_t CurrentDraw_LinearActuator = this->PDP.GetCurrent(PDPChannel_LinearActuator);
   double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
   double_t CurrentThresholdValue = this->GetThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
+
+  double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
 
   /**
    * State Machine
@@ -221,41 +210,44 @@ void Robot::AutonomousPeriodic() {
   else {
     this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
   }
-
-  //Retract 
+  //Update current robot state
   this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
   
   /**
    * State Behavior Machine
    */
   if(this->CURRENT_ROBOT_STATE == RESET) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_HOLD_OUTPUT);
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_ZERO_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
   }
 
   else if(this->CURRENT_ROBOT_STATE == HOLD) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput, 0.0);
-    this->srx.Set(ControlMode::PercentOutput, 0.0); 
+    this->SRX_LINACT.Set(ControlMode::PercentOutput, SCOOP_ZERO_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput, FOURBAR_ZERO_OUTPUT); 
   }
 
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,0);
-    this->srx.Set(ControlMode::PercentOutput,.9);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_ZERO_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_EXTEND_OUTPUT);
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
-    this->srx.Set(ControlMode::PercentOutput,FOURBAR_OUTPUT_ZERO);
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,-.9);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_EXTEND_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
+
   }
   else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
-    this->srx.Set(ControlMode::PercentOutput,.9);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_RETRACT_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
   }
   else {
-    this->srx.Set(ControlMode::PercentOutput,0);
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,0);
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,SCOOP_ZERO_OUTPUT);
+    this->srx.Set(ControlMode::PercentOutput,FOURBAR_ZERO_OUTPUT);
   }
+
   if(this->joystick.GetRawButton(8)) {
     this->DisplayRobotState();
   }
+ 
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   if(channel > 3) {
@@ -376,13 +368,6 @@ void Robot::TeleopPeriodic() {
 
   else if(joystick.GetRawButton(3)) {
     srx.Set(ControlMode::PercentOutput,1.0);
-    /*
-    wpi::outs() <<"Button 1 pressed, entering magic motion mode\n";
-    double TargetPos = Right_Y_Stick + 4096 * 10.0;
-    srx.Set(ControlMode::MotionMagic,TargetPos);
-    SRX_LINACT.Set(ControlMode::MotionMagic,TargetPos);
-    */
-
   }
   else if(joystick.GetRawButton(1)) {
     srx.Set(ControlMode::PercentOutput,-1.0);
