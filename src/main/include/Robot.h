@@ -48,7 +48,8 @@ class Robot : public frc::TimedRobot {
   bool AutoPilot = false;
   bool AutoPilotStarted = false;
   size_t AutoCycleCount = 0;
-  double_t GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState);
+  double_t GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState);
+  double_t GetCurrentThresholdValue(ROBOT_STATE CurrentState);
   std::string GetStateAsString(ROBOT_STATE state);
 
 

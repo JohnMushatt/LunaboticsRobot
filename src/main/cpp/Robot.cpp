@@ -110,7 +110,7 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
       return std::string("ERR");
   }
 }
-double_t Robot::GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
+double_t Robot::GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
   if(CycleCount == 0) {
     if (CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
       return FOURBAR_DIG_EXTENSION_LIMIT;
@@ -132,6 +132,11 @@ double_t Robot::GetThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
       return SCOOP_RETRACTION_LIMIT;
     }
     
+  }
+}
+double_t Robot::GetCurrentThresholdValue(ROBOT_STATE CurrentState) {
+  if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP) {
+    return 1.0;
   }
 }
 void Robot::DisplayRobotState() {
@@ -156,14 +161,16 @@ void Robot::DisplayRobotState() {
 void Robot::AutonomousPeriodic() {
 
   /**
-   * Get important data about the state of the robot
+   * Positional Information
    */
   double_t PositionActuator = this->GetLinearActuatorTurnValue();
   double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
-  double_t CurrentThresholdValue = this->GetThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
-
+  double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
+  /**
+   * Current Information
+   */
   double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
-
+  double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
   /**
    * State Machine
    */
@@ -174,7 +181,7 @@ void Robot::AutonomousPeriodic() {
   //Extend fourbar state
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
 
-    if(PositionFourbar < CurrentThresholdValue) {
+    if(PositionFourbar < PositionThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
     }
     else {
@@ -183,7 +190,7 @@ void Robot::AutonomousPeriodic() {
   }
   //Extend scoop state
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
-    if(PositionActuator < CurrentThresholdValue) {
+    if(PositionActuator < PositionThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
     }
     else {
@@ -192,7 +199,7 @@ void Robot::AutonomousPeriodic() {
   }
   //Retract scoop state
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_SCOOP) {
-    if(PositionActuator > CurrentThresholdValue) {
+    if(PositionActuator > PositionThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_SCOOP;
     }
     else {
@@ -200,7 +207,7 @@ void Robot::AutonomousPeriodic() {
     }
   }
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
-    if(PositionFourbar > CurrentThresholdValue) {
+    if(PositionFourbar > PositionThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
     }
     else {
@@ -209,6 +216,12 @@ void Robot::AutonomousPeriodic() {
   }
   else {
     this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
+  }
+  //If current is passing estimated load, move on to dumping
+  if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP){ 
+    if(LinearActuatorCurrent > CurrentThresholdValue) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
+    }
   }
   //Update current robot state
   this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
