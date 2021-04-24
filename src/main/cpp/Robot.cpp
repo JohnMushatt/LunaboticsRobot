@@ -28,8 +28,12 @@
 //Scoop dump motor positions
 #define SCOOP_DUMP_POSITION (600)
 //Fourbar motor output values
+
+//Zero motor output
 #define FOURBAR_ZERO_OUTPUT (0.0)
+//Will move fourbar lower to the ground
 #define FOURBAR_EXTEND_OUTPUT (0.50)
+//Will move fourbar closes to starting/dumping position
 #define FOURBAR_RETRACT_OUTPUT (-0.50)
 //Scoop motor output values
 
@@ -195,7 +199,7 @@ void Robot::AutonomousPeriodic() {
   }
   //Retract scoop state
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
-    if(PositionActuator > PositionThresholdValue) {
+    if(PositionActuator < PositionThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
     }
     else {
@@ -235,8 +239,12 @@ void Robot::AutonomousPeriodic() {
   /**
    * State Behavior Machine
    */
+  //Scop motor output
   double_t MotorOutputScoop= 0.0;
+  //Fourbar motor output
   double_t MotorOutputFourbar = 0.0;
+  
+  
   if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
     MotorOutputScoop = SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
@@ -256,13 +264,13 @@ void Robot::AutonomousPeriodic() {
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
 
   }
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
-    MotorOutputScoop = SCOOP_RETRACT_OUTPUT;
-    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
-  }
   else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::DIG_RETRACT_FOURBAR) {
     MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
+  }
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
+    MotorOutputScoop = SCOOP_RETRACT_OUTPUT;
+    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
   else {
     MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
