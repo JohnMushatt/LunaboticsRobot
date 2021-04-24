@@ -39,10 +39,11 @@ class Robot : public frc::TimedRobot {
    * Auto pilot variables and functions
    */
   enum ROBOT_STATE {RESET,
-  DIG_EXTEND_FOURBAR,  DIG_RETRACT_FOURBAR,
-  DIG_EXTEND_SCOOP,  DIG_RETRACT_SCOOP,
-  DUMP_EXTEND_SCOOP, DUMP_RETRACT_SCOOP
-  ,ERR,DONE,HOLD};
+  DIG_EXTEND_FOURBAR,//Move the Fourbar down to digging position  
+  DIG_RETRACT_FOURBAR, //Move the Fourbar back to reset/dump position
+  DIG_EXTEND_SCOOP,//Extend the linear actuator aka bring the scoop in to collect material  
+  DUMP_SCOOP, //Retract the linear actuator aka THIS WILL DUMP MATERIAL 
+  ERR,DONE,HOLD};
   ROBOT_STATE CURRENT_ROBOT_STATE;
   ROBOT_STATE NEXT_ROBOT_STATE;
   bool AutoPilot = false;

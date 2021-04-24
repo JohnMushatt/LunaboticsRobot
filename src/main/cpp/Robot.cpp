@@ -10,34 +10,41 @@
 #define ANALOG_CHANNELS (4)
 #define PDPChannel_LinearActuator (0)
 //Fourbar dig motor positions
-#define FOURBAR_DIG_EXTENSION_LIMIT (3800.0)
-#define FOURBAR_DIG_RETRACTION_LIMIT (100.0)
+
+//Fourbar position for digging
+#define FOURBAR_DIG_EXTENSION_LIMIT (3700.0)
+
+//Fourbar position for reset
+#define FOURBAR_DIG_RETRACTION_LIMIT (0.0)
+
 //Scoop dig motor positions
-#define SCOOP_EXTENSION_LIMIT (4500.0)
+
+//Scoop position for collecting material
+#define SCOOP_EXTENSION_LIMIT (4700.0)
+//Scoop position for dumping material
 #define SCOOP_RETRACTION_LIMIT (510.0)
 //Fourbar dump motor positions
-#define FOURBAR_DUMP_POSITION (100)
+#define FOURBAR_DUMP_POSITION (810.0)
 //Scoop dump motor positions
-#define SCOOP_DUMP_POSITION (1000)
+#define SCOOP_DUMP_POSITION (600)
 //Fourbar motor output values
 #define FOURBAR_ZERO_OUTPUT (0.0)
-#define FOURBAR_EXTEND_OUTPUT (0.90)
-#define FOURBAR_RETRACT_OUTPUT (-0.90)
+#define FOURBAR_EXTEND_OUTPUT (0.50)
+#define FOURBAR_RETRACT_OUTPUT (-0.50)
 //Scoop motor output values
+
+//Zero output for scoop motor
 #define SCOOP_ZERO_OUTPUT (0.0)
-#define SCOOP_EXTEND_OUTPUT (-0.90)
-#define SCOOP_RETRACT_OUTPUT (0.90)
+//Will move linear actuator out/positive direction
+#define SCOOP_EXTEND_OUTPUT (0.90)
+//Will move linear actuator in/negative direction
+#define SCOOP_RETRACT_OUTPUT (-0.90)
 
 void Robot::RobotInit() {
-  m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
-  m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
-  frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
-  frc::SmartDashboard::PutNumber("AN 0",this->AN_0_IN);
   this->InitializeAnalogInput(0,4);
   
   this->InitializeTalonLinearActuator();
   this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
-  //this->AddPeriodic(std::bind(&Robot::DisplayRobotState,this),2_s,0_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -74,7 +81,7 @@ void Robot::RobotPeriodic() {
   frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
   frc::SmartDashboard::PutString("Current Robot State",this->GetStateAsString(this->CURRENT_ROBOT_STATE));
   frc::SmartDashboard::PutNumber("Linear Actuator Current",LinearActuatorCurrent);
-
+  frc::SmartDashboard::PutBoolean("Button 7 Pressed?",(bool)this->joystick.GetRawButton(7));
   frc::SmartDashboard::PutNumber("Linear Actuactor Motor Output",this->SRX_LINACT.GetMotorOutputPercent());
   frc::SmartDashboard::PutNumber("Fourbar Motor Output",this->srx.GetMotorOutputPercent());
   frc::SmartDashboard::PutNumber("Position Threshold",PositionThresholdValue);
@@ -97,17 +104,6 @@ void Robot::AutonomousInit() {
   m_autoSelected = m_chooser.GetSelected();
   srx.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
-  
-
-  // m_autoSelected = SmartDashboard::GetString("Auto Selector",
-  //     kAutoNameDefault);
-  std::cout << "Auto selected: " << m_autoSelected << std::endl;
-
-  if (m_autoSelected == kAutoNameCustom) {
-    // Custom Auto goes here
-  } else {
-    // Default Auto goes here
-  }
 }
 std::string Robot::GetStateAsString(ROBOT_STATE state) {
 
@@ -120,12 +116,8 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
       return std::string("DIG_EXTEND_SCOOP");    
     case ROBOT_STATE::DIG_RETRACT_FOURBAR:
       return std::string("DIG_RETRACT_FOURBAR");    
-    case ROBOT_STATE::DIG_RETRACT_SCOOP:
-      return std::string("DIG_RETRACT_SCOOP");
-    case ROBOT_STATE::DUMP_EXTEND_SCOOP:
-      return std::string("DUMP_EXTEND_SCOOP");
-    case ROBOT_STATE::DUMP_RETRACT_SCOOP:
-      return std::string("DUMP_RETRACT_SCOOP");
+    case ROBOT_STATE::DUMP_SCOOP:
+      return std::string("DUMP_SCOOP");
     case ROBOT_STATE::HOLD:
       return std::string("HOLD");
     default:
@@ -141,19 +133,12 @@ double_t Robot::GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE Current
     {
       return SCOOP_EXTENSION_LIMIT;
     }
-    else if(CurrentState == ROBOT_STATE::DIG_RETRACT_SCOOP) {
+    else if(CurrentState == ROBOT_STATE::DUMP_SCOOP) {
       return SCOOP_RETRACTION_LIMIT;
     }
     else if(CurrentState == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
       return FOURBAR_DIG_RETRACTION_LIMIT;
-    }
-    else if(CurrentState == ROBOT_STATE::DUMP_EXTEND_SCOOP) {
-      return SCOOP_DUMP_POSITION;
-    }
-    else if(CurrentState ==ROBOT_STATE::DUMP_RETRACT_SCOOP) {
-      return SCOOP_RETRACTION_LIMIT;
-    }
-    
+    }    
   }
 }
 double_t Robot::GetCurrentThresholdValue(ROBOT_STATE CurrentState) {
@@ -208,19 +193,10 @@ void Robot::AutonomousPeriodic() {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
     }
   }
-  //Extend scoop state
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
-    if(PositionActuator < PositionThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
-    }
-  }
   //Retract scoop state
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_SCOOP) {
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
     if(PositionActuator > PositionThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_SCOOP;
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
     }
     else {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
@@ -231,18 +207,28 @@ void Robot::AutonomousPeriodic() {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
     }
     else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_EXTEND_SCOOP;
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
+    }
+  }
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
+    if(PositionActuator > PositionThresholdValue) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
+    }
+    else {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
     }
   }
   else {
     this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
   }
+  /*
   //If current is passing estimated load, move on to dumping
   if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP){ 
     if(LinearActuatorCurrent > CurrentThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
     }
   }
+  */
   //Update current robot state
   this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
   
@@ -251,30 +237,30 @@ void Robot::AutonomousPeriodic() {
    */
   double_t MotorOutputScoop= 0.0;
   double_t MotorOutputFourbar = 0.0;
-  if(this->CURRENT_ROBOT_STATE == RESET) {
+  if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
     MotorOutputScoop = SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
 
-  else if(this->CURRENT_ROBOT_STATE == HOLD) {
+  else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::HOLD) {
     MotorOutputScoop = SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
 
-  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_FOURBAR) {
-    MotorOutputScoop = SCOOP_EXTEND_OUTPUT;
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+    MotorOutputScoop = SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_EXTEND_OUTPUT;
   }
-  else if(this->CURRENT_ROBOT_STATE == DIG_EXTEND_SCOOP) {
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
     MotorOutputScoop =  SCOOP_EXTEND_OUTPUT;
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
 
   }
-  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_SCOOP) {
+  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
     MotorOutputScoop = SCOOP_RETRACT_OUTPUT;
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
-  else if(this->CURRENT_ROBOT_STATE == DIG_RETRACT_FOURBAR) {
+  else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::DIG_RETRACT_FOURBAR) {
     MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
   }
@@ -282,16 +268,10 @@ void Robot::AutonomousPeriodic() {
     MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
     MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
   }
-  //Step debug function to try to debug things within the state machine
-  if(!this->joystick.GetRawButton(2)) {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
-    this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
-  }
-  else {
-    this->SRX_LINACT.Set(ControlMode::PercentOutput,0.0);
-    this->srx.Set(ControlMode::PercentOutput,0.0);
+  this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
+  this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
 
-  }
+
  
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
