@@ -51,6 +51,7 @@ class Robot : public frc::TimedRobot {
   size_t AutoCycleCount = 0;
   double_t GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState);
   double_t GetCurrentThresholdValue(ROBOT_STATE CurrentState);
+  double_t GetPotentiometerReading();
   std::string GetStateAsString(ROBOT_STATE state);
 
 

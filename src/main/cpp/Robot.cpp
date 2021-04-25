@@ -24,7 +24,7 @@
 //Scoop position for dumping material
 #define SCOOP_RETRACTION_LIMIT (510.0)
 //Fourbar dump motor positions
-#define FOURBAR_DUMP_POSITION (810.0)
+#define FOURBAR_DUMP_POSITION (1200.0)
 //Scoop dump motor positions
 #define SCOOP_DUMP_POSITION (600)
 //Fourbar motor output values
@@ -40,15 +40,14 @@
 //Zero output for scoop motor
 #define SCOOP_ZERO_OUTPUT (0.0)
 //Will move linear actuator out/positive direction
-#define SCOOP_EXTEND_OUTPUT (0.90)
+#define SCOOP_EXTEND_OUTPUT (-0.90)
 //Will move linear actuator in/negative direction
-#define SCOOP_RETRACT_OUTPUT (-0.90)
+#define SCOOP_RETRACT_OUTPUT (0.90)
 
 void Robot::RobotInit() {
   this->InitializeAnalogInput(0,4);
   
   this->InitializeTalonLinearActuator();
-  this->AddPeriodic(std::bind(&Robot::ReadAnalogChannel0Callback,this),1_s,0_s);
 }
 void Robot::SimulationInit() {
   PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
@@ -81,15 +80,23 @@ void Robot::RobotPeriodic() {
   double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
   double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
     //Update SmartDashbord
-  frc::SmartDashboard::PutNumber("Actuator Position",PositionActuator);
-  frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
+
   frc::SmartDashboard::PutString("Current Robot State",this->GetStateAsString(this->CURRENT_ROBOT_STATE));
-  frc::SmartDashboard::PutNumber("Linear Actuator Current",LinearActuatorCurrent);
   frc::SmartDashboard::PutBoolean("Button 7 Pressed?",(bool)this->joystick.GetRawButton(7));
+
+  frc::SmartDashboard::PutNumber("Linear Actuator Position",PositionActuator);
+  frc::SmartDashboard::PutNumber("Linear Actuator Current",LinearActuatorCurrent);
   frc::SmartDashboard::PutNumber("Linear Actuactor Motor Output",this->SRX_LINACT.GetMotorOutputPercent());
+  frc::SmartDashboard::PutNumber("Linear Actuator Potentiometer Reading (V)",this->GetPotentiometerReading());
+
+  frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
   frc::SmartDashboard::PutNumber("Fourbar Motor Output",this->srx.GetMotorOutputPercent());
+  frc::SmartDashboard::PutNumber("Fourbar Current",this->srx.GetOutputCurrent());
+
+
   frc::SmartDashboard::PutNumber("Position Threshold",PositionThresholdValue);
   frc::SmartDashboard::PutBoolean("Current Exceed Safe Value? ", LinearActuatorCurrent >= CurrentThresholdValue);
+
 }
 
 /**
@@ -145,10 +152,20 @@ double_t Robot::GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE Current
     }    
   }
 }
+/**
+ * Return the correct value for current threshold depending on the current digging state
+ */
 double_t Robot::GetCurrentThresholdValue(ROBOT_STATE CurrentState) {
   if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP) {
-    return 1.0;
+    return 0.7;
   }
+  else if(CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+    return 0.25;
+  }
+}
+
+double_t Robot::GetPotentiometerReading() {
+  return this->VEC_ANALOG_IN.at(0).GetAverageVoltage();
 }
 void Robot::DisplayRobotState() {
     
@@ -176,7 +193,7 @@ void Robot::AutonomousPeriodic() {
    */
   double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
   double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
-  
+  double_t FourbarCurrent = this->srx.GetOutputCurrent();
 
 
   
@@ -190,7 +207,7 @@ void Robot::AutonomousPeriodic() {
   //Extend fourbar state
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
 
-    if(PositionFourbar < PositionThresholdValue) {
+    if(PositionFourbar < PositionThresholdValue && FourbarCurrent <= CurrentThresholdValue) {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
     }
     else {
