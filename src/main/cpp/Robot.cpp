@@ -15,7 +15,7 @@
 #define FOURBAR_DIG_EXTENSION_LIMIT (3700.0)
 
 //Fourbar position for reset
-#define FOURBAR_DIG_RETRACTION_LIMIT (0.0)
+#define FOURBAR_DIG_RETRACTION_LIMIT (300.0)
 
 //Scoop dig motor positions
 
@@ -91,7 +91,7 @@ void Robot::RobotPeriodic() {
 
   frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
   frc::SmartDashboard::PutNumber("Fourbar Motor Output",this->srx.GetMotorOutputPercent());
-  frc::SmartDashboard::PutNumber("Fourbar Current",this->srx.GetOutputCurrent());
+  frc::SmartDashboard::PutNumber("Fourbar Current",this->GetAvgFourbarCurrent());
 
 
   frc::SmartDashboard::PutNumber("Position Threshold",PositionThresholdValue);
@@ -112,9 +112,21 @@ void Robot::RobotPeriodic() {
  */
 void Robot::AutonomousInit() {
   this->CURRENT_ROBOT_STATE = RESET;
-  m_autoSelected = m_chooser.GetSelected();
   srx.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
+}
+size_t Robot::GetAvgCurrentBufferIndex() {
+  return this->AvgCurrentBufferIndex;
+}
+
+double_t Robot::GetAvgFourbarCurrent() {
+  double_t val = 0.0;
+  for(size_t index =0; index < this->AvgFourbarCurrentBuffer.size();index++) {
+    val+=this->AvgFourbarCurrentBuffer.at(index);
+  }
+
+  val = val / this->AvgFourbarCurrentBuffer.size();
+  return val;
 }
 std::string Robot::GetStateAsString(ROBOT_STATE state) {
 
@@ -137,19 +149,19 @@ std::string Robot::GetStateAsString(ROBOT_STATE state) {
 }
 double_t Robot::GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState) {
   if(CycleCount == 0) {
-    if (CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
-      return FOURBAR_DIG_EXTENSION_LIMIT;
-    }
-    else if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP)
-    {
-      return SCOOP_EXTENSION_LIMIT;
-    }
-    else if(CurrentState == ROBOT_STATE::DUMP_SCOOP) {
-      return SCOOP_RETRACTION_LIMIT;
-    }
-    else if(CurrentState == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
-      return FOURBAR_DIG_RETRACTION_LIMIT;
-    }    
+      if (CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+        return FOURBAR_DIG_EXTENSION_LIMIT;
+      }
+      else if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP)
+      {
+        return SCOOP_EXTENSION_LIMIT;
+      }
+      else if(CurrentState == ROBOT_STATE::DUMP_SCOOP) {
+        return SCOOP_RETRACTION_LIMIT;
+      }
+      else if(CurrentState == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+        return FOURBAR_DIG_RETRACTION_LIMIT;
+      }    
   }
 }
 /**
@@ -172,6 +184,13 @@ void Robot::DisplayRobotState() {
 
   
 }
+void Robot::UpdateCurrentBuffer() {
+  this->AvgFourbarCurrentBuffer.at(this->AvgCurrentBufferIndex) = this->srx.GetOutputCurrent();
+  this->AvgCurrentBufferIndex++;
+  if(this->AvgCurrentBufferIndex ==this->AvgFourbarCurrentBuffer.size()) {
+    this->AvgCurrentBufferIndex= 0;
+  }
+}
 /**
  * Should be general autonomous function, but for now it will be auto digger
  * From starting position (0), fourbar motor needs to slowly (ControlMode::PercentOutput = 0.15)
@@ -182,6 +201,7 @@ void Robot::DisplayRobotState() {
  */
 void Robot::AutonomousPeriodic() {
 
+  this->UpdateCurrentBuffer();
   /**
    * Positional Information
    */
@@ -193,7 +213,7 @@ void Robot::AutonomousPeriodic() {
    */
   double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
   double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
-  double_t FourbarCurrent = this->srx.GetOutputCurrent();
+  double_t FourbarCurrent = this->GetAvgFourbarCurrent();
 
 
   

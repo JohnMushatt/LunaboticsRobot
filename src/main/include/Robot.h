@@ -49,6 +49,13 @@ class Robot : public frc::TimedRobot {
   bool AutoPilot = false;
   bool AutoPilotStarted = false;
   size_t AutoCycleCount = 0;
+
+  std::array<double_t,1024> AvgFourbarCurrentBuffer;
+  size_t AvgCurrentBufferIndex = 0;
+  size_t GetAvgCurrentBufferIndex();
+  double_t GetAvgFourbarCurrent();
+  void UpdateCurrentBuffer();
+
   double_t GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE CurrentState);
   double_t GetCurrentThresholdValue(ROBOT_STATE CurrentState);
   double_t GetPotentiometerReading();
@@ -70,8 +77,4 @@ class Robot : public frc::TimedRobot {
   frc::Joystick joystick{0};
   TalonSRX srx = {1};
   TalonSRX SRX_LINACT = {5};
-  frc::SendableChooser<std::string> m_chooser;
-  const std::string kAutoNameDefault = "Default";
-  const std::string kAutoNameCustom = "My Auto";
-  std::string m_autoSelected;
 };
