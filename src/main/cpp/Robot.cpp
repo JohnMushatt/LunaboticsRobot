@@ -15,14 +15,14 @@
 #define FOURBAR_DIG_EXTENSION_LIMIT (3700.0)
 
 //Fourbar position for reset
-#define FOURBAR_DIG_RETRACTION_LIMIT (300.0)
+#define FOURBAR_DIG_RETRACTION_LIMIT (500.0)
 
 //Scoop dig motor positions
 
 //Scoop position for collecting material
 #define SCOOP_EXTENSION_LIMIT (4700.0)
 //Scoop position for dumping material
-#define SCOOP_RETRACTION_LIMIT (510.0)
+#define SCOOP_RETRACTION_LIMIT (520.0)
 //Fourbar dump motor positions
 #define FOURBAR_DUMP_POSITION (1200.0)
 //Scoop dump motor positions
@@ -84,9 +84,9 @@ void Robot::RobotPeriodic() {
   frc::SmartDashboard::PutString("Current Robot State",this->GetStateAsString(this->CURRENT_ROBOT_STATE));
   frc::SmartDashboard::PutBoolean("Button 7 Pressed?",(bool)this->joystick.GetRawButton(7));
 
-  frc::SmartDashboard::PutNumber("Linear Actuator Position",PositionActuator);
   frc::SmartDashboard::PutNumber("Linear Actuator Current",LinearActuatorCurrent);
   frc::SmartDashboard::PutNumber("Linear Actuactor Motor Output",this->SRX_LINACT.GetMotorOutputPercent());
+  frc::SmartDashboard::PutNumber("Linear Actuator Position",PositionActuator);
   frc::SmartDashboard::PutNumber("Linear Actuator Potentiometer Reading (V)",this->GetPotentiometerReading());
 
   frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
@@ -152,6 +152,9 @@ double_t Robot::GetPositionThresholdValue(size_t CycleCount, ROBOT_STATE Current
       if (CurrentState == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
         return FOURBAR_DIG_EXTENSION_LIMIT;
       }
+      else if(CurrentState== ROBOT_STATE::RESET) {
+        return 50.0;
+      }
       else if(CurrentState == ROBOT_STATE::DIG_EXTEND_SCOOP)
       {
         return SCOOP_EXTENSION_LIMIT;
@@ -175,15 +178,20 @@ double_t Robot::GetCurrentThresholdValue(ROBOT_STATE CurrentState) {
     return 0.25;
   }
 }
-
+/**
+ * Returns a value from 0.0V to 5.0V after conversion from 12-bit ADC 
+ */
 double_t Robot::GetPotentiometerReading() {
   return this->VEC_ANALOG_IN.at(0).GetAverageVoltage();
 }
 void Robot::DisplayRobotState() {
-    
-
-  
 }
+int64_t Robot::GetPotentiometerReadingInTurns() {
+  int64_t val = (int64_t) (this->VEC_ANALOG_IN.at(0).GetAverageVoltage() * 2.0);
+  return val;
+
+}
+  
 void Robot::UpdateCurrentBuffer() {
   this->AvgFourbarCurrentBuffer.at(this->AvgCurrentBufferIndex) = this->srx.GetOutputCurrent();
   this->AvgCurrentBufferIndex++;
@@ -221,8 +229,13 @@ void Robot::AutonomousPeriodic() {
    * State Machine
    */
   //Reset state, go to DIG_EXTEND_FOURBAR
-  if(this->CURRENT_ROBOT_STATE == RESET) {
-    this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
+  if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
+    if(PositionFourbar > 50.0) {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
+    }
+    else {
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
+    }
   }
   //Extend fourbar state
   else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
@@ -256,11 +269,11 @@ void Robot::AutonomousPeriodic() {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
     }
     else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
+      this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
     }
   }
   else {
-    this->NEXT_ROBOT_STATE = ROBOT_STATE::DONE;
+    this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
   }
   /*
   //If current is passing estimated load, move on to dumping
@@ -284,7 +297,7 @@ void Robot::AutonomousPeriodic() {
   
   if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
     MotorOutputScoop = SCOOP_ZERO_OUTPUT;
-    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
+    MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
   }
 
   else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::HOLD) {
