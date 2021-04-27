@@ -245,6 +245,7 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
       }
       else {
+        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionFourbar;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
       }
     }
@@ -254,6 +255,7 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
       }
       else {
+        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionActuator;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
       }
     }
@@ -262,6 +264,7 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
       }
       else {
+        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionFourbar;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
       }
     }
@@ -270,6 +273,7 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
       }
       else {
+        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionActuator;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
       }
     }
@@ -286,14 +290,19 @@ void Robot::AutonomousPeriodic() {
     */
 
     if(this->CURRENT_ROBOT_STATE !=this->NEXT_ROBOT_STATE) {
-      std::time_t TimeInState = std::time(NULL) - this->RuntimeLog.RunStart;
-      ;
-      Robot::RunInformation::StateLog CurrentStateLog;
+      std::time_t StateEndTime = std::time(NULL) - this->RuntimeLog.RunStart;
       
-      this->RuntimeLog.StateTimes.push(CurrentStateLog);
+      
+      this->RuntimeLog.StateTimes.top().StateEnd = StateEndTime;
+      this->RuntimeLog.StateTimes.top().TargetPosition = PositionThresholdValue;
+      RunInformation::StateLog NextEvent;
+      NextEvent.State = this->NEXT_ROBOT_STATE;
+      NextEvent.StateStart = StateEndTime;
+      this->RuntimeLog.StateTimes.push(NextEvent);
     }
     //Update current robot state
     this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
+
     
     /**
      * State Behavior Machine

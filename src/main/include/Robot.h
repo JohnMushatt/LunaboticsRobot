@@ -53,6 +53,9 @@ class Robot : public frc::TimedRobot {
         std::time_t StateStart;
         std::time_t StateEnd;
         ROBOT_STATE State;
+        StateLog() {
+
+        }
       };
       std::vector<std::time_t> CycleTimes;
       std::stack<StateLog> StateTimes;
