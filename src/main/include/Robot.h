@@ -32,6 +32,8 @@ class Robot : public frc::TimedRobot {
   void SimulationInit() override;
 	void SimulationPeriodic() override;
   double_t GetLinearActuatorTurnValue();
+
+  
  private:
   int _smoothing;
 
@@ -49,7 +51,30 @@ class Robot : public frc::TimedRobot {
   bool AutoPilot = false;
   bool AutoPilotStarted = false;
   size_t AutoCycleCount = 0;
+  typedef struct RunInformation_t {
+    struct LinearActuator {
+      double_t AverageCurrent;
+      double_t AverageMovingCurrent;
+      double_t AverageDiggingCurrent;
+      double_t AverageDumpingCurrent;
+      std::vector<std::pair<double_t,double_t>> TargetEncoderDifference;
 
+    };
+    struct BagMotor {
+      double_t AverageCurrent;
+      double_t AverageMovingCurrent;
+      double_t AverageDiggingCurrent;
+      double_t AverageDumpingCurrent;
+      std::vector<std::pair<double_t,double_t>> TargetEncoderDifference;
+
+    };
+    std::vector<std::time_t> CycleTimes;
+    std::vector<std::pair<ROBOT_STATE,std::time_t>> StateTimes;
+    ssize_t AutoDigCycles = -1;
+  } RunInformation;
+  RunInformation RuntimeLog;
+
+  
   std::array<double_t,1024> AvgFourbarCurrentBuffer;
   size_t AvgCurrentBufferIndex = 0;
   size_t GetAvgCurrentBufferIndex();
