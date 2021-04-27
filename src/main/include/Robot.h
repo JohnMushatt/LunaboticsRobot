@@ -16,6 +16,7 @@
 #include <frc/Joystick.h>
 #include <Instrum.h>
 #include <vector>
+#include <stack>
 #include <memory>
 class Robot : public frc::TimedRobot {
  public:
@@ -32,11 +33,6 @@ class Robot : public frc::TimedRobot {
   void SimulationInit() override;
 	void SimulationPeriodic() override;
   double_t GetLinearActuatorTurnValue();
-
-  
- private:
-  int _smoothing;
-
   /**
    * Auto pilot variables and functions
    */
@@ -46,32 +42,37 @@ class Robot : public frc::TimedRobot {
   DIG_EXTEND_SCOOP,//Extend the linear actuator aka bring the scoop in to collect material  
   DUMP_SCOOP, //Retract the linear actuator aka THIS WILL DUMP MATERIAL 
   ERR,DONE,HOLD};
+  typedef struct RunInformation_t {
+    public:
+      struct StateLog {
+        double_t AverageCurrent = 0.0;
+        double_t MaxCurrent = 0.0;
+        double_t MinCurrent = 0.0;
+        double_t TargetPosition = 0.0;
+        double_t FeedbackPosition = 0.0;
+        std::time_t StateStart;
+        std::time_t StateEnd;
+        ROBOT_STATE State;
+      };
+      std::vector<std::time_t> CycleTimes;
+      std::stack<StateLog> StateTimes;
+      std::time_t RunStart;
+      std::time_t RunEnd;
+      std::time_t TotalRunTime;
+      size_t AutoDigCycles =0;
+  } RunInformation;
+ private:
+  int _smoothing;
+
+  
   ROBOT_STATE CURRENT_ROBOT_STATE;
   ROBOT_STATE NEXT_ROBOT_STATE;
   bool AutoPilot = false;
   bool AutoPilotStarted = false;
   size_t AutoCycleCount = 0;
-  typedef struct RunInformation_t {
-    struct LinearActuator {
-      double_t AverageCurrent;
-      double_t AverageMovingCurrent;
-      double_t AverageDiggingCurrent;
-      double_t AverageDumpingCurrent;
-      std::vector<std::pair<double_t,double_t>> TargetEncoderDifference;
 
-    };
-    struct BagMotor {
-      double_t AverageCurrent;
-      double_t AverageMovingCurrent;
-      double_t AverageDiggingCurrent;
-      double_t AverageDumpingCurrent;
-      std::vector<std::pair<double_t,double_t>> TargetEncoderDifference;
 
-    };
-    std::vector<std::time_t> CycleTimes;
-    std::vector<std::pair<ROBOT_STATE,std::time_t>> StateTimes;
-    ssize_t AutoDigCycles = -1;
-  } RunInformation;
+  
   RunInformation RuntimeLog;
 
   

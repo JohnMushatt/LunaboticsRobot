@@ -98,6 +98,7 @@
     "random": "cpp",
     "string_view": "cpp",
     "future": "cpp",
-    "cinttypes": "cpp"
+    "cinttypes": "cpp",
+    "stack": "cpp"
   }
 }

@@ -112,6 +112,8 @@ void Robot::RobotPeriodic() {
  */
 void Robot::AutonomousInit() {
   this->CURRENT_ROBOT_STATE = RESET;
+  this->RuntimeLog.RunStart = std::time(NULL);
+
   srx.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
 }
@@ -208,127 +210,134 @@ void Robot::UpdateCurrentBuffer() {
  * Estimated Full range until scoop actuation: 0 -> -7000
  */
 void Robot::AutonomousPeriodic() {
+  if(this->AutoCycleCount <3) {
+    this->UpdateCurrentBuffer();
+    /**
+     * Positional Information
+     */
+    double_t PositionActuator = this->GetLinearActuatorTurnValue();
+    double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+    double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
+    /**
+     * Current Information
+     */
+    double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
+    double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
+    double_t FourbarCurrent = this->GetAvgFourbarCurrent();
 
-  this->UpdateCurrentBuffer();
-  /**
-   * Positional Information
-   */
-  double_t PositionActuator = this->GetLinearActuatorTurnValue();
-  double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
-  double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
-  /**
-   * Current Information
-   */
-  double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
-  double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
-  double_t FourbarCurrent = this->GetAvgFourbarCurrent();
 
+    /**
+     * State Machine
+     */
+    //Reset state, go to DIG_EXTEND_FOURBAR
+    if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
+      if(PositionFourbar > 50.0) {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
+      }
+      else {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
+      }
+    }
+    //Extend fourbar state
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
 
-  
-  /**
-   * State Machine
-   */
-  //Reset state, go to DIG_EXTEND_FOURBAR
-  if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
-    if(PositionFourbar > 50.0) {
+      if(PositionFourbar < PositionThresholdValue && FourbarCurrent <= CurrentThresholdValue) {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
+      }
+      else {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
+      }
+    }
+    //Retract scoop state
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
+      if(PositionActuator < PositionThresholdValue) {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
+      }
+      else {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
+      }
+    }
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+      if(PositionFourbar > PositionThresholdValue) {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
+      }
+      else {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
+      }
+    }
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
+      if(PositionActuator > PositionThresholdValue) {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
+      }
+      else {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
+      }
+    }
+    else {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
     }
-    else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
+    /*
+    //If current is passing estimated load, move on to dumping
+    if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP){ 
+      if(LinearActuatorCurrent > CurrentThresholdValue) {
+        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
+      }
     }
-  }
-  //Extend fourbar state
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+    */
 
-    if(PositionFourbar < PositionThresholdValue && FourbarCurrent <= CurrentThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
+    if(this->CURRENT_ROBOT_STATE !=this->NEXT_ROBOT_STATE) {
+      std::time_t TimeInState = std::time(NULL) - this->RuntimeLog.RunStart;
+      ;
+      Robot::RunInformation::StateLog CurrentStateLog;
+      
+      this->RuntimeLog.StateTimes.push(CurrentStateLog);
+    }
+    //Update current robot state
+    this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
+    
+    /**
+     * State Behavior Machine
+     */
+    //Scop motor output
+    double_t MotorOutputScoop= 0.0;
+    //Fourbar motor output
+    double_t MotorOutputFourbar = 0.0;
+    
+    
+    if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
+      MotorOutputScoop = SCOOP_ZERO_OUTPUT;
+      MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
+    }
+
+    else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::HOLD) {
+      MotorOutputScoop = SCOOP_ZERO_OUTPUT;
+      MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
+    }
+
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
+      MotorOutputScoop = SCOOP_ZERO_OUTPUT;
+      MotorOutputFourbar = FOURBAR_EXTEND_OUTPUT;
+    }
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
+      MotorOutputScoop =  SCOOP_EXTEND_OUTPUT;
+      MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
+
+    }
+    else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+      MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
+      MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
+    }
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
+      MotorOutputScoop = SCOOP_RETRACT_OUTPUT;
+      MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
     }
     else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
+      MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
+      MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
     }
+    this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
+    this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
   }
-  //Retract scoop state
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
-    if(PositionActuator < PositionThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
-    }
-  }
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_RETRACT_FOURBAR) {
-    if(PositionFourbar > PositionThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
-    }
-  }
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
-    if(PositionActuator > PositionThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
-    }
-    else {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
-    }
-  }
-  else {
-    this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
-  }
-  /*
-  //If current is passing estimated load, move on to dumping
-  if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP){ 
-    if(LinearActuatorCurrent > CurrentThresholdValue) {
-      this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
-    }
-  }
-  */
-  //Update current robot state
-  this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
-  
-  /**
-   * State Behavior Machine
-   */
-  //Scop motor output
-  double_t MotorOutputScoop= 0.0;
-  //Fourbar motor output
-  double_t MotorOutputFourbar = 0.0;
-  
-  
-  if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
-    MotorOutputScoop = SCOOP_ZERO_OUTPUT;
-    MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
-  }
-
-  else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::HOLD) {
-    MotorOutputScoop = SCOOP_ZERO_OUTPUT;
-    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
-  }
-
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR) {
-    MotorOutputScoop = SCOOP_ZERO_OUTPUT;
-    MotorOutputFourbar = FOURBAR_EXTEND_OUTPUT;
-  }
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP) {
-    MotorOutputScoop =  SCOOP_EXTEND_OUTPUT;
-    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
-
-  }
-  else if(this->CURRENT_ROBOT_STATE ==ROBOT_STATE::DIG_RETRACT_FOURBAR) {
-    MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
-    MotorOutputFourbar = FOURBAR_RETRACT_OUTPUT;
-  }
-  else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DUMP_SCOOP) {
-    MotorOutputScoop = SCOOP_RETRACT_OUTPUT;
-    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
-  }
-  else {
-    MotorOutputScoop =  SCOOP_ZERO_OUTPUT;
-    MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
-  }
-  this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
-  this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
-
 
  
 }
