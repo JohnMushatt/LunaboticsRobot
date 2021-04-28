@@ -44,6 +44,7 @@ class Robot : public frc::TimedRobot {
   ERR,DONE,HOLD};
   typedef struct RunInformation_t {
     public:
+      void PrintRunInfo();
       struct StateLog {
         double_t AverageCurrent = 0.0;
         double_t MaxCurrent = std::numeric_limits<double_t>::min();
@@ -58,6 +59,7 @@ class Robot : public frc::TimedRobot {
         StateLog() {
 
         }
+        std::string Stringify();
       };
       std::vector<std::time_t> CycleTimes;
       std::stack<StateLog> StateTimes;
@@ -94,7 +96,7 @@ class Robot : public frc::TimedRobot {
   double_t GetCurrentThresholdValue(ROBOT_STATE CurrentState);
   double_t GetPotentiometerReading();
   int64_t GetPotentiometerReadingInTurns();
-  std::string GetStateAsString(ROBOT_STATE state);
+  static std::string GetStateAsString(ROBOT_STATE state);
 
 
 

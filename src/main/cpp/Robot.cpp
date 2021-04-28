@@ -228,10 +228,10 @@ void Robot::UpdateLog() {
     /**
      * Compute end time for state
      */
-    std::time_t EndingTimestamp = std::time(NULL);
+    std::time_t EndingTimestamp = std::time(NULL) - this->RuntimeLog.RunStart;
     this->RuntimeLog.StateTimes.top().StateEnd = EndingTimestamp;
     this->RuntimeLog.StateTimes.top().State = this->CURRENT_ROBOT_STATE;
-
+    this->RuntimeLog.StateTimes.top().EndVoltage = this->PDP.GetVoltage();
     Robot::RunInformation::StateLog CurrentStateLog;
     CurrentStateLog.AverageCurrent = this->GetAvgFourbarCurrent();
 
@@ -261,6 +261,28 @@ void Robot::UpdateLog() {
       }
     }
   }
+}
+void Robot::RunInformation::PrintRunInfo() {
+  while(!this->StateTimes.empty()) {
+    wpi::outs() << this->StateTimes.top().Stringify();
+    this->StateTimes.pop();
+
+  }
+
+}
+std::string Robot::RunInformation::StateLog::Stringify() {
+
+  std::ostringstream ostream;
+  std::time_t TotalTime = (this->StateEnd - this->StateStart);
+  double_t Error = (this->FeedbackPosition - this->TargetPosition) / this->TargetPosition * 100.0;
+
+  ostream << "State[" << Robot::GetStateAsString(this->State) << "] ";
+  ostream << "Time[" << TotalTime << "] "; 
+  ostream << "% Error[" << Error << "%] ";
+  ostream << "Avg Current[" <<this->AverageCurrent << " A]\n";
+  std::string result = ostream.str();
+  
+  return result;
 }
 /**
  * Should be general autonomous function, but for now it will be auto digger
@@ -388,7 +410,10 @@ void Robot::AutonomousPeriodic() {
     this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
     this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
   }
-
+  if(this->AutoCycleCount==1) {
+    this->RuntimeLog.PrintRunInfo();
+    this->AutoCycleCount++;
+  }
  
 }
 void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
