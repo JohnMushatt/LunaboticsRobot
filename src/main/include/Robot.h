@@ -46,12 +46,14 @@ class Robot : public frc::TimedRobot {
     public:
       struct StateLog {
         double_t AverageCurrent = 0.0;
-        double_t MaxCurrent = 0.0;
-        double_t MinCurrent = 0.0;
+        double_t MaxCurrent = std::numeric_limits<double_t>::min();
+        double_t MinCurrent = std::numeric_limits<double_t>::max();
         double_t TargetPosition = 0.0;
         double_t FeedbackPosition = 0.0;
         std::time_t StateStart;
         std::time_t StateEnd;
+        double_t StartVoltage;
+        double_t EndVoltage;
         ROBOT_STATE State;
         StateLog() {
 
@@ -61,9 +63,12 @@ class Robot : public frc::TimedRobot {
       std::stack<StateLog> StateTimes;
       std::time_t RunStart;
       std::time_t RunEnd;
+      double_t StartVoltage;
+      double_t EndVoltage;
       std::time_t TotalRunTime;
       size_t AutoDigCycles =0;
   } RunInformation;
+  void UpdateLog();
  private:
   int _smoothing;
 

@@ -113,7 +113,12 @@ void Robot::RobotPeriodic() {
 void Robot::AutonomousInit() {
   this->CURRENT_ROBOT_STATE = RESET;
   this->RuntimeLog.RunStart = std::time(NULL);
-
+  this->RuntimeLog.StartVoltage = this->PDP.GetVoltage();
+  Robot::RunInformation::StateLog InitialStateLog;
+  InitialStateLog.State = this->CURRENT_ROBOT_STATE;
+  InitialStateLog.StateStart = this->RuntimeLog.RunStart;
+  InitialStateLog.StartVoltage= this->RuntimeLog.StartVoltage;
+  this->RuntimeLog.StateTimes.push(InitialStateLog);
   srx.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
 }
@@ -201,6 +206,62 @@ void Robot::UpdateCurrentBuffer() {
     this->AvgCurrentBufferIndex= 0;
   }
 }
+void Robot::UpdateLog() {
+  /**
+    * Positional Information
+    */
+  double_t PositionActuator = this->GetLinearActuatorTurnValue();
+  double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+  double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
+  /**
+   * Current Information
+   */
+  double_t LinearActuatorCurrent = this->SRX_LINACT.GetOutputCurrent();
+  double_t CurrentThresholdValue = this->GetCurrentThresholdValue(this->CURRENT_ROBOT_STATE);
+  double_t FourbarCurrent = this->GetAvgFourbarCurrent();
+  /**
+   * Log info about the current state *transition*, not general state
+   */
+  if(this->CURRENT_ROBOT_STATE !=this->NEXT_ROBOT_STATE) {
+    
+  
+    /**
+     * Compute end time for state
+     */
+    std::time_t EndingTimestamp = std::time(NULL);
+    this->RuntimeLog.StateTimes.top().StateEnd = EndingTimestamp;
+    this->RuntimeLog.StateTimes.top().State = this->CURRENT_ROBOT_STATE;
+
+    Robot::RunInformation::StateLog CurrentStateLog;
+    CurrentStateLog.AverageCurrent = this->GetAvgFourbarCurrent();
+
+
+    if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR || ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+      CurrentStateLog.FeedbackPosition = PositionFourbar;
+      CurrentStateLog.AverageCurrent = FourbarCurrent;
+    }
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP || ROBOT_STATE::DUMP_SCOOP) {
+      CurrentStateLog.FeedbackPosition = PositionActuator;
+      CurrentStateLog.AverageCurrent = LinearActuatorCurrent;
+    }
+    CurrentStateLog.TargetPosition = PositionThresholdValue;
+    CurrentStateLog.StateStart = EndingTimestamp;
+    this->RuntimeLog.StateTimes.push(CurrentStateLog);
+  }
+  else {
+    if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR || ROBOT_STATE::DIG_RETRACT_FOURBAR) {
+      this->RuntimeLog.StateTimes.top().AverageCurrent = FourbarCurrent;
+    }
+    else if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP || ROBOT_STATE::DUMP_SCOOP) {
+      if(this->RuntimeLog.StateTimes.top().MaxCurrent < LinearActuatorCurrent) {
+        this->RuntimeLog.StateTimes.top().MaxCurrent = LinearActuatorCurrent;
+      }
+      if(this->RuntimeLog.StateTimes.top().MinCurrent > LinearActuatorCurrent) {
+        this->RuntimeLog.StateTimes.top().MinCurrent = LinearActuatorCurrent;
+      }
+    }
+  }
+}
 /**
  * Should be general autonomous function, but for now it will be auto digger
  * From starting position (0), fourbar motor needs to slowly (ControlMode::PercentOutput = 0.15)
@@ -245,7 +306,6 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_FOURBAR;
       }
       else {
-        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionFourbar;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
       }
     }
@@ -255,7 +315,6 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_EXTEND_SCOOP;
       }
       else {
-        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionActuator;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
       }
     }
@@ -264,7 +323,6 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
       }
       else {
-        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionFourbar;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
       }
     }
@@ -273,36 +331,19 @@ void Robot::AutonomousPeriodic() {
         this->NEXT_ROBOT_STATE = ROBOT_STATE::DUMP_SCOOP;
       }
       else {
-        this->RuntimeLog.StateTimes.top().FeedbackPosition = PositionActuator;
         this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
       }
     }
     else {
       this->NEXT_ROBOT_STATE = ROBOT_STATE::RESET;
     }
-    /*
-    //If current is passing estimated load, move on to dumping
-    if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_SCOOP){ 
-      if(LinearActuatorCurrent > CurrentThresholdValue) {
-        this->NEXT_ROBOT_STATE = ROBOT_STATE::DIG_RETRACT_FOURBAR;
-      }
-    }
-    */
-
-    if(this->CURRENT_ROBOT_STATE !=this->NEXT_ROBOT_STATE) {
-      std::time_t StateEndTime = std::time(NULL) - this->RuntimeLog.RunStart;
-      
-      
-      this->RuntimeLog.StateTimes.top().StateEnd = StateEndTime;
-      this->RuntimeLog.StateTimes.top().TargetPosition = PositionThresholdValue;
-      RunInformation::StateLog NextEvent;
-      NextEvent.State = this->NEXT_ROBOT_STATE;
-      NextEvent.StateStart = StateEndTime;
-      this->RuntimeLog.StateTimes.push(NextEvent);
+    this->UpdateLog();
+    if(this->NEXT_ROBOT_STATE == ROBOT_STATE::RESET) {
+      this->AutoCycleCount++;
+      this->RuntimeLog.AutoDigCycles= this->AutoCycleCount;
     }
     //Update current robot state
     this->CURRENT_ROBOT_STATE = this->NEXT_ROBOT_STATE;
-
     
     /**
      * State Behavior Machine
@@ -311,7 +352,7 @@ void Robot::AutonomousPeriodic() {
     double_t MotorOutputScoop= 0.0;
     //Fourbar motor output
     double_t MotorOutputFourbar = 0.0;
-    
+      
     
     if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::RESET) {
       MotorOutputScoop = SCOOP_ZERO_OUTPUT;
@@ -357,7 +398,6 @@ void Robot::InitializeAnalogInput(uint64_t channel, uint64_t bits) {
   if(this->VEC_ANALOG_IN.size()==0 || this->VEC_ANALOG_IN.size() < channel) {
     this->VEC_ANALOG_IN.push_back(frc::AnalogInput(channel))  ;
   }
-  //this->VEC_ANALOG_IN[channel] = frc::AnalogInput(channel);
   this->VEC_ANALOG_IN[channel].SetOversampleBits(bits);
 }
 double_t Robot::ReadAnalogIn(uint64_t channel) {
