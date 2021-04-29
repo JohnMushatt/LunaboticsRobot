@@ -131,7 +131,6 @@ double_t Robot::GetAvgFourbarCurrent() {
   for(size_t index =0; index < this->AvgFourbarCurrentBuffer.size();index++) {
     val+=this->AvgFourbarCurrentBuffer.at(index);
   }
-
   val = val / this->AvgFourbarCurrentBuffer.size();
   return val;
 }
@@ -444,6 +443,7 @@ void Robot::ReadPDPChannel(uint64_t channel) {
 void Robot::ReadAnalogChannel0Callback() {
   this->AN_0_IN = this->VEC_ANALOG_IN[0].GetAverageVoltage();
 }
+
 double_t Robot::GetLinearActuatorTurnValue() {
   double_t CurrentAnologReading = this->VEC_ANALOG_IN[0].GetAverageVoltage();
 
@@ -451,6 +451,7 @@ double_t Robot::GetLinearActuatorTurnValue() {
    * (10000.0f - 0.0f) + 0.0f;
   return ScaledAnalogReading;
 }
+
 void Robot::InitializeTalonLinearActuator() {
   SRX_FOURBAR.ConfigFactoryDefault();
   SRX_LINACT.ConfigFactoryDefault();
