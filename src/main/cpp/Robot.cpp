@@ -50,7 +50,7 @@ void Robot::RobotInit() {
   this->InitializeTalonLinearActuator();
 }
 void Robot::SimulationInit() {
-  PhysicsSim::GetInstance().AddTalonSRX(srx,.75,3400,false);
+  PhysicsSim::GetInstance().AddTalonSRX(SRX_FOURBAR,.75,3400,false);
   PhysicsSim::GetInstance().AddTalonSRX(SRX_LINACT,.75,3400,false);
 }
 
@@ -72,7 +72,7 @@ void Robot::RobotPeriodic() {
    * Positional Information
    */
   double_t PositionActuator = this->GetLinearActuatorTurnValue();
-  double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+  double_t PositionFourbar = this->SRX_FOURBAR.GetSelectedSensorPosition();
   double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
   /**
    * Current Information
@@ -90,7 +90,7 @@ void Robot::RobotPeriodic() {
   frc::SmartDashboard::PutNumber("Linear Actuator Potentiometer Reading (V)",this->GetPotentiometerReading());
 
   frc::SmartDashboard::PutNumber("Fourbar Position",PositionFourbar);
-  frc::SmartDashboard::PutNumber("Fourbar Motor Output",this->srx.GetMotorOutputPercent());
+  frc::SmartDashboard::PutNumber("Fourbar Motor Output",this->SRX_FOURBAR.GetMotorOutputPercent());
   frc::SmartDashboard::PutNumber("Fourbar Current",this->GetAvgFourbarCurrent());
 
 
@@ -118,8 +118,8 @@ void Robot::AutonomousInit() {
   InitialStateLog.State = this->CURRENT_ROBOT_STATE;
   InitialStateLog.StateStart = this->RuntimeLog.RunStart;
   InitialStateLog.StartVoltage= this->RuntimeLog.StartVoltage;
-  this->RuntimeLog.StateTimes.push(InitialStateLog);
-  srx.SetSelectedSensorPosition(0,0,10);
+  this->RuntimeLog.StateTimes.emplace(InitialStateLog);
+  SRX_FOURBAR.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
 }
 size_t Robot::GetAvgCurrentBufferIndex() {
@@ -186,7 +186,7 @@ double_t Robot::GetCurrentThresholdValue(ROBOT_STATE CurrentState) {
   }
 }
 /**
- * Returns a value from 0.0V to 5.0V after conversion from 12-bit ADC 
+ * Returns a value from 0.0V to 5.0V after conversion from 12-bit ADC with 
  */
 double_t Robot::GetPotentiometerReading() {
   return this->VEC_ANALOG_IN.at(0).GetAverageVoltage();
@@ -200,7 +200,7 @@ int64_t Robot::GetPotentiometerReadingInTurns() {
 }
   
 void Robot::UpdateCurrentBuffer() {
-  this->AvgFourbarCurrentBuffer.at(this->AvgCurrentBufferIndex) = this->srx.GetOutputCurrent();
+  this->AvgFourbarCurrentBuffer.at(this->AvgCurrentBufferIndex) = this->SRX_FOURBAR.GetOutputCurrent();
   this->AvgCurrentBufferIndex++;
   if(this->AvgCurrentBufferIndex ==this->AvgFourbarCurrentBuffer.size()) {
     this->AvgCurrentBufferIndex= 0;
@@ -211,7 +211,7 @@ void Robot::UpdateLog() {
     * Positional Information
     */
   double_t PositionActuator = this->GetLinearActuatorTurnValue();
-  double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+  double_t PositionFourbar = this->SRX_FOURBAR.GetSelectedSensorPosition();
   double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
   /**
    * Current Information
@@ -246,7 +246,7 @@ void Robot::UpdateLog() {
     }
     CurrentStateLog.TargetPosition = PositionThresholdValue;
     CurrentStateLog.StateStart = EndingTimestamp;
-    this->RuntimeLog.StateTimes.push(CurrentStateLog);
+    this->RuntimeLog.StateTimes.emplace(CurrentStateLog);
   }
   else {
     if(this->CURRENT_ROBOT_STATE == ROBOT_STATE::DIG_EXTEND_FOURBAR || ROBOT_STATE::DIG_RETRACT_FOURBAR) {
@@ -299,7 +299,7 @@ void Robot::AutonomousPeriodic() {
      * Positional Information
      */
     double_t PositionActuator = this->GetLinearActuatorTurnValue();
-    double_t PositionFourbar = this->srx.GetSelectedSensorPosition();
+    double_t PositionFourbar = this->SRX_FOURBAR.GetSelectedSensorPosition();
     double_t PositionThresholdValue = this->GetPositionThresholdValue(this->AutoCycleCount,this->CURRENT_ROBOT_STATE);
     /**
      * Current Information
@@ -408,7 +408,7 @@ void Robot::AutonomousPeriodic() {
       MotorOutputFourbar = FOURBAR_ZERO_OUTPUT;
     }
     this->SRX_LINACT.Set(ControlMode::PercentOutput,MotorOutputScoop);
-    this->srx.Set(ControlMode::PercentOutput,MotorOutputFourbar);
+    this->SRX_FOURBAR.Set(ControlMode::PercentOutput,MotorOutputFourbar);
   }
   if(this->AutoCycleCount==1) {
     this->RuntimeLog.PrintRunInfo();
@@ -452,41 +452,41 @@ double_t Robot::GetLinearActuatorTurnValue() {
   return ScaledAnalogReading;
 }
 void Robot::InitializeTalonLinearActuator() {
-  srx.ConfigFactoryDefault();
+  SRX_FOURBAR.ConfigFactoryDefault();
   SRX_LINACT.ConfigFactoryDefault();
-  srx.ConfigSelectedFeedbackSensor(FeedbackDevice::CTRE_MagEncoder_Relative,0,10);
+  SRX_FOURBAR.ConfigSelectedFeedbackSensor(FeedbackDevice::CTRE_MagEncoder_Relative,0,10);
   SRX_LINACT.ConfigSelectedFeedbackSensor(FeedbackDevice::CTRE_MagEncoder_Relative,0,10);
   /**
      * Configure Talon SRX Output and Sesnor direction accordingly
      * Invert Motor to have green LEDs when driving Talon Forward / Requesting Postiive Output
      * Phase sensor to have positive increment when driving Talon Forward (Green LED)
      */
-  srx.SetSensorPhase(false);
-  srx.SetInverted(false);
+  SRX_FOURBAR.SetSensorPhase(false);
+  SRX_FOURBAR.SetInverted(false);
   SRX_LINACT.SetSensorPhase(false);
   SRX_LINACT.SetInverted(false);
 
   /* Set relevant frame periods to be at least as fast as periodic rate */
-  srx.SetStatusFramePeriod(StatusFrameEnhanced::Status_13_Base_PIDF0, 10, 10);
-  srx.SetStatusFramePeriod(StatusFrameEnhanced::Status_10_MotionMagic, 10, 10);
+  SRX_FOURBAR.SetStatusFramePeriod(StatusFrameEnhanced::Status_13_Base_PIDF0, 10, 10);
+  SRX_FOURBAR.SetStatusFramePeriod(StatusFrameEnhanced::Status_10_MotionMagic, 10, 10);
   SRX_LINACT.SetStatusFramePeriod(StatusFrameEnhanced::Status_13_Base_PIDF0,10,10);
   SRX_LINACT.SetStatusFramePeriod(StatusFrame::Status_10_MotionMagic_,10,10);
 
   /* Set the peak and nominal outputs */
-  srx.ConfigNominalOutputForward(0, 10);
-  srx.ConfigNominalOutputReverse(0, 10);
-  srx.ConfigPeakOutputForward(1, 10);
-  srx.ConfigPeakOutputReverse(-1, 10);
+  SRX_FOURBAR.ConfigNominalOutputForward(0, 10);
+  SRX_FOURBAR.ConfigNominalOutputReverse(0, 10);
+  SRX_FOURBAR.ConfigPeakOutputForward(1, 10);
+  SRX_FOURBAR.ConfigPeakOutputReverse(-1, 10);
   SRX_LINACT.ConfigNominalOutputForward(0, 10);
   SRX_LINACT.ConfigNominalOutputReverse(0, 10);
   SRX_LINACT.ConfigPeakOutputForward(1, 10);
   SRX_LINACT.ConfigPeakOutputReverse(-1, 10);
   /* Set Motion Magic gains in slot0 - see documentation */
-  srx.SelectProfileSlot(0,0);
-  srx.Config_kF(0,0.3,10);
-  srx.Config_kP(0,0.1,10);
-  srx.Config_kI(0.0,0.0,10);
-  srx.Config_kD(0,0.0,10);
+  SRX_FOURBAR.SelectProfileSlot(0,0);
+  SRX_FOURBAR.Config_kF(0,0.3,10);
+  SRX_FOURBAR.Config_kP(0,0.1,10);
+  SRX_FOURBAR.Config_kI(0.0,0.0,10);
+  SRX_FOURBAR.Config_kD(0,0.0,10);
 
   SRX_LINACT.SelectProfileSlot(0,0);
   SRX_LINACT.Config_kF(0,0.3,10);
@@ -496,7 +496,7 @@ void Robot::InitializeTalonLinearActuator() {
   SRX_LINACT.ConfigMotionCruiseVelocity(1500,10);
   SRX_LINACT.ConfigMotionAcceleration(1500,10);
 
-  srx.SetSelectedSensorPosition(0,0,10);
+  SRX_FOURBAR.SetSelectedSensorPosition(0,0,10);
   SRX_LINACT.SetSelectedSensorPosition(0,0,10);
 
 }
@@ -521,22 +521,22 @@ void Robot::TeleopPeriodic() {
   if(fabs(Right_Y_Stick) < 0.10) {
     Right_Y_Stick =0;
   }
-  double MotorOuput = srx.GetMotorOutputPercent();
+  double MotorOuput = SRX_FOURBAR.GetMotorOutputPercent();
 
   std::stringstream sb;
   if(joystick.GetRawButton(8)) {
     this->DisplayRobotState();
   }
   if(joystick.GetRawButton(2)) {
-    srx.SetSelectedSensorPosition(0,0,10);
+    SRX_FOURBAR.SetSelectedSensorPosition(0,0,10);
     SRX_LINACT.SetSelectedSensorPosition(0,0,10);
   }
 
   else if(joystick.GetRawButton(3)) {
-    srx.Set(ControlMode::PercentOutput,1.0);
+    SRX_FOURBAR.Set(ControlMode::PercentOutput,1.0);
   }
   else if(joystick.GetRawButton(1)) {
-    srx.Set(ControlMode::PercentOutput,-1.0);
+    SRX_FOURBAR.Set(ControlMode::PercentOutput,-1.0);
   }
   
   else {
@@ -550,7 +550,7 @@ void Robot::TeleopPeriodic() {
     else {
       New_Left_Y = Left_Y_Stick * .9;
     }
-    srx.Set(ControlMode::PercentOutput,New_Left_Y);
+    SRX_FOURBAR.Set(ControlMode::PercentOutput,New_Left_Y);
     if(Right_Y_Stick > 0) {
       SRX_LINACT.Set(ControlMode::PercentOutput,1);
     }
@@ -562,7 +562,7 @@ void Robot::TeleopPeriodic() {
       _smoothing = 0;
     }
     wpi::outs() << "Smoothing is set to: " << _smoothing << "\n";
-    srx.ConfigMotionSCurveStrength(_smoothing,0);
+    SRX_FOURBAR.ConfigMotionSCurveStrength(_smoothing,0);
     SRX_LINACT.ConfigMotionSCurveStrength(_smoothing,0);
   }
 
@@ -572,11 +572,11 @@ void Robot::TeleopPeriodic() {
       _smoothing = 0;
     }
     wpi::outs() << "Smoothing is set to: " << _smoothing << "\n";
-    srx.ConfigMotionSCurveStrength(_smoothing,0);
+    SRX_FOURBAR.ConfigMotionSCurveStrength(_smoothing,0);
     SRX_LINACT.ConfigMotionSCurveStrength(_smoothing,0);
 
   }
-    Instrum::Process(&srx,&sb);
+    Instrum::Process(&SRX_FOURBAR,&sb);
     Instrum::Process(&SRX_LINACT,&sb);
   
 }

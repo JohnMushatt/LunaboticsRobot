@@ -112,6 +112,6 @@ class Robot : public frc::TimedRobot {
   std::vector<frc::AnalogInput> VEC_ANALOG_IN;
   frc::PowerDistributionPanel PDP;
   frc::Joystick joystick{0};
-  TalonSRX srx = {1};
+  TalonSRX SRX_FOURBAR = {1};
   TalonSRX SRX_LINACT = {5};
 };
